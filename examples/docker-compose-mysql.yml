@@ -1,0 +1,36 @@
+version: '3'
+services:
+  redis:
+    image: redis:3
+    restart: always
+    volumes:
+      - redis:/data
+  mysql:
+    image: mysql:5.6
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: superset
+      MYSQL_DATABASE: superset
+      MYSQL_USER: superset
+      MYSQL_PASSWORD: superset
+    volumes:
+      - mysql:/var/lib/mysql
+  superset:
+    image: muicoder/superset
+    restart: always
+    depends_on:
+      - redis
+      - mysql
+    environment:
+      MAPBOX_API_KEY: ${MAPBOX_API_KEY:-superset}
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./superset_mysql:/home/superset/.superset
+      - ./superset_mysql.py:/home/superset/.superset/superset_config.py
+volumes:
+  redis:
+    external: false
+  mysql:
+    external: false
+

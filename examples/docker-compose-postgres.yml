@@ -1,0 +1,35 @@
+version: '3'
+services:
+  redis:
+    image: redis:3
+    restart: always
+    volumes:
+      - redis:/data
+  postgres:
+    image: postgres:9.6
+    restart: always
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_PASSWORD: superset
+      POSTGRES_USER: superset
+    volumes:
+      - postgres:/var/lib/postgresql/data
+  superset:
+    image: muicoder/superset
+    restart: always
+    depends_on:
+      - redis
+      - postgres
+    environment:
+      MAPBOX_API_KEY: ${MAPBOX_API_KEY:-superset}
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./superset_postgres:/home/superset/.superset
+      - ./superset_postgres.py:/home/superset/.superset/superset_config.py
+volumes:
+  redis:
+    external: false
+  postgres:
+    external: false
+

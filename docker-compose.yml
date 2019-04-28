@@ -1,0 +1,23 @@
+version: '3'
+services:
+  redis:
+    image: redis:3
+    restart: always
+    volumes:
+      - redis:/data
+  superset:
+    image: muicoder/superset
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      MAPBOX_API_KEY: ${MAPBOX_API_KEY:-superset}
+    ports:
+      - "8088:8088"
+    volumes:
+      - data:/home/superset/.superset
+volumes:
+  redis:
+    external: false
+  data:
+    external: false
