@@ -1,0 +1,29 @@
+FROM muicoder/alpine:jdk
+
+ARG TOMCAT_VERSION=8.0.53
+ARG WORK=/opt
+
+ENV CATALINA_HOME=$WORK/tomcat
+ENV CATALINA_OUT=/dev/null
+
+ENV PATH=$CATALINA_HOME/bin:$PATH
+
+SHELL ["bash", "-c"]
+RUN set -ex; \
+    apk add --no-cache pwgen && \
+    wget -qP $JRE_HOME/lib/ext https://downloads.bouncycastle.org/java/bcprov-jdk15on-161.jar && \
+    wget -qP $JRE_HOME/lib/ext https://downloads.bouncycastle.org/java/bcprov-ext-jdk15on-161.jar && \
+    sed -i "s/security.provider.2=sun.security.rsa.SunRsaSign/#security.provider.2=sun.security.rsa.SunRsaSign\nsecurity.provider.2=org.bouncycastle.jce.provider.BouncyCastleProvider/" $JRE_HOME/lib/security/java.security && \
+    curl -jksSL http://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_VERSION:0:1}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar -xzf - -C $WORK && \
+        ln -s $WORK/apache-tomcat-$TOMCAT_VERSION $CATALINA_HOME && \
+        sed -ri 's|^#!/bin/sh$|#!/usr/bin/env bash|' $CATALINA_HOME/bin/*.sh && \
+        wget -qP $CATALINA_HOME/lib http://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_VERSION:0:1}/v${TOMCAT_VERSION}/bin/extras/catalina-jmx-remote.jar && \
+    curl -fsSL https://github.com/muicoder/tomcat/raw/master/entrypoint.sh -o /sbin/entrypoint.sh && \
+        chmod +x /sbin/*
+
+WORKDIR $CATALINA_HOME
+VOLUME $CATALINA_HOME/logs
+EXPOSE 8080 8443
+
+ENTRYPOINT ["tini", "-s", "--", "entrypoint.sh"]
+CMD ["catalina.sh", "run"]

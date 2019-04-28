@@ -1,0 +1,20 @@
+ARG VERSION=alpine
+FROM muicoder/tomcat:$VERSION
+
+ARG TOMCAT_NATIVE_LIBDIR=$CATALINA_HOME/native-jni-lib
+ENV LD_LIBRARY_PATH ${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$TOMCAT_NATIVE_LIBDIR
+
+RUN set -ex; \
+    apk --no-cache add apr-dev openssl-dev && \
+    (temp="$(mktemp -d)" && \
+    apk --no-cache add --virtual .native-build-deps build-base coreutils && \
+        tar -xf $CATALINA_HOME/bin/tomcat-native.tar.gz --strip-components=1 -C $temp; \
+        cd $temp/native; \
+        $temp/native/configure --with-apr=$(which apr-1-config) \
+            --with-java-home=$JAVA_HOME \
+            --libdir=$TOMCAT_NATIVE_LIBDIR \
+            --with-ssl=yes \
+            --prefix=$CATALINA_HOME; \
+        make -j "$(nproc)"; \
+        make install) && rm -rf /tmp/*; \
+    apk del .native-build-deps
