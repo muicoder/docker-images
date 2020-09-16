@@ -1,0 +1,78 @@
+{
+  "metadata": {
+    "community": [
+      {
+        "description": "Kubernetes 基本管理功能",
+        "color": "#909399"
+      },
+      {
+        "description": "容器日志及终端",
+        "color": "#909399"
+      },
+      {
+        "description": "Github/GitLab 单点登录",
+        "color": "#909399"
+      },
+      {
+        "description": "RBAC 权限管理",
+        "color": "#909399"
+      },
+      {
+        "description": "Top Nodes / Top Pods",
+        "color": "#909399"
+      },
+      {
+        "description": "CRD 管理",
+        "color": "#909399"
+      },
+      {
+        "description": "Kuboard Proxy",
+        "color": "#909399"
+      },
+      {
+        "description": "Kuboard 官方套件",
+        "color": "#909399"
+      },
+      {
+        "description": "Kuboard 自定义名称空间布局",
+        "color": "#909399"
+      },
+      {
+        "description": "Kuboard 中英文语言包",
+        "color": "#909399"
+      }
+    ],
+    "customizeCompanyName": {
+      "description": "可以定制页尾显示的公司名称",
+      "color": "rgb(0, 122, 245)"
+    },
+    "basic": {
+      "description": "基础特性包",
+      "color": "rgb(0, 122, 245)"
+    },
+    "xpack": {
+      "description": "增强特性包",
+      "color": "#FFA13C",
+      "anchor": "xpack"
+    }
+  },
+  "productId": "level-2",
+  "orderId": "12345678901234567",
+  "orderItemId": "12345678901234567",
+  "companyName": "companyName",
+  "productName": "增强版",
+  "issuer": "uc.kuboard.cn",
+  "features": [
+    "community",
+    "customizeCompanyName",
+    "basic",
+    "xpack"
+  ],
+  "companyId": "12345678901234567",
+  "productVersion": "v20200613",
+  "companyIcpCode": "companyIcpCode",
+  "kuboardAccessEndpoint": "",
+  "validUntil": "2023-06-14",
+  "issueDate": "2020-06-13",
+  "licenseId": "12345678901234567"
+}
