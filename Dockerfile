@@ -3,7 +3,7 @@ WORKDIR /rc
 RUN find /usr/local/bin -type f -perm /+x -exec mv {} . \;; \
     mv helm helm_v3; \
     ls -l
-FROM rancher/rancher:v2.4.8 AS rc
+FROM rancher/rancher:v2.4.16 AS rc
 WORKDIR /rc
 RUN find /usr/bin -type f -perm /+x -size +5M -exec mv {} . \;; \
     mv /usr/bin/*.sh .; \
@@ -11,7 +11,7 @@ RUN find /usr/bin -type f -perm /+x -size +5M -exec mv {} . \;; \
     ls -l
 COPY --from=k8s /rc /rc
 FROM ubuntu:bionic
-ARG VERSION=v2.4.8
+ARG VERSION=v2.4.16
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y git curl ca-certificates unzip xz-utils && \
     useradd rancher && \
@@ -34,20 +34,20 @@ ARG RANCHER_METADATA_BRANCH=release-v2.4
 
 ENV CATTLE_SYSTEM_CHART_DEFAULT_BRANCH=$SYSTEM_CHART_DEFAULT_BRANCH \
     CATTLE_HELM_VERSION=v2.16.8-rancher1 \
-    CATTLE_K3S_VERSION=v1.17.12+k3s1 \
-    CATTLE_MACHINE_VERSION=v0.15.0-rancher45 \
+    CATTLE_K3S_VERSION=v1.17.17+k3s1 \
+    CATTLE_MACHINE_VERSION=v0.15.0-rancher46 \
     CATTLE_ETCD_VERSION=v3.4.3 \
     CATTLE_CHANNELSERVER_VERSION=v0.3.0 \
     LOGLEVEL_VERSION=v0.1.3 \
     TINI_VERSION=v0.18.0 \
-    TELEMETRY_VERSION=v0.5.12 \
-    KUBECTL_VERSION=v1.19.2 \
+    TELEMETRY_VERSION=v0.5.14 \
+    KUBECTL_VERSION=v1.21.3 \
     DOCKER_MACHINE_LINODE_VERSION=v0.1.8 \
     LINODE_UI_DRIVER_VERSION=v0.3.0 \
     RANCHER_METADATA_BRANCH=${RANCHER_METADATA_BRANCH} \
     CATTLE_DASHBOARD_INDEX=https://releases.rancher.com/dashboard/${DASHBOARD_BRANCH}/index.html \
-    HELM_VERSION=v3.3.3 \
-    KUSTOMIZE_VERSION=v3.8.2
+    HELM_VERSION=v3.6.2 \
+    KUSTOMIZE_VERSION=v4.2.0
 
 RUN mkdir -p /var/lib/rancher-data/local-catalogs/system-library && \
     mkdir -p /var/lib/rancher-data/local-catalogs/library && \
@@ -83,8 +83,8 @@ ENV TINI_URL_amd64=https://github.com/krallin/tini/releases/download/${TINI_VERS
     KUSTOMIZE_URL=KUSTOMIZE_URL_${ARCH}
 
 ENV CATTLE_UI_PATH=/usr/share/rancher/ui \
-    CATTLE_UI_VERSION=2.4.34 \
-    CATTLE_CLI_VERSION=v2.4.6 \
+    CATTLE_UI_VERSION=2.4.48 \
+    CATTLE_CLI_VERSION=v2.4.11 \
     CATTLE_API_UI_VERSION=1.1.9
 
 RUN mkdir -p /var/log/auditlog && \

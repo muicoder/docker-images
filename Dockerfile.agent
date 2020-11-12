@@ -2,13 +2,13 @@ FROM muicoder/alpine:k8s AS k8s
 WORKDIR /rc
 RUN for bin in kubectl k9s popeye jq yq kubectx kubens; do cp -a /usr/local/bin/$bin .; done; \
     ls -l
-FROM rancher/rancher-agent:v2.4.8 as rc
+FROM rancher/rancher-agent:v2.4.16 as rc
 WORKDIR /rc
 RUN for bin in docker loglevel share-mnt kube-prompt agent *.sh; do cp -a /usr/bin/$bin .; done; \
     ls -l
 COPY --from=k8s /rc /rc
 FROM ubuntu:bionic
-ARG VERSION=v2.4.8
+ARG VERSION=v2.4.16
 ARG ARCH=amd64
 ENV DOCKER_URL_amd64=https://get.docker.com/builds/Linux/x86_64/docker-1.10.3 \
     DOCKER_URL_arm64=https://github.com/rancher/docker/releases/download/v1.10.3-ros1/docker-1.10.3_arm64 \
@@ -22,7 +22,7 @@ COPY --from=rc /rc /usr/bin
 
 LABEL io.cattle.agent true
 ENV DOCKER_API_VERSION=1.24 \
-    KUBECTL_VERSION=v1.19.2 \
+    KUBECTL_VERSION=v1.21.3 \
     LOGLEVEL_VERSION=v0.1.3 \
     KUBEPROMPT_VERSION=v1.0.10 \
     AGENT_IMAGE=muicoder/rancher-agent:${VERSION} \
