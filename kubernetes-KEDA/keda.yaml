@@ -4,18 +4,13 @@ metadata:
   labels:
     app.kubernetes.io/name: keda
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
-  creationTimestamp: null
   labels:
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: clustertriggerauthentications.keda.sh
 spec:
   group: keda.sh
@@ -165,12 +160,8 @@ status:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
-  creationTimestamp: null
   labels:
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: scaledjobs.keda.sh
 spec:
   group: keda.sh
@@ -6994,12 +6985,8 @@ status:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
-  creationTimestamp: null
   labels:
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: scaledobjects.keda.sh
 spec:
   group: keda.sh
@@ -7332,12 +7319,8 @@ status:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.3.0
-  creationTimestamp: null
   labels:
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: triggerauthentications.keda.sh
 spec:
   group: keda.sh
@@ -7489,7 +7472,6 @@ metadata:
   labels:
     app.kubernetes.io/name: keda-operator
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda-operator
   namespace: keda
 ---
@@ -7499,7 +7481,6 @@ metadata:
   labels:
     app.kubernetes.io/name: keda-external-metrics-reader
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda-external-metrics-reader
 rules:
 - apiGroups:
@@ -7512,11 +7493,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   labels:
     app.kubernetes.io/name: keda-operator
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda-operator
 rules:
 - apiGroups:
@@ -7595,12 +7574,24 @@ rules:
   - '*'
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: extension-apiserver-authentication-reader
+  namespace: keda
+rules:
+- apiGroups:
+  - "*"
+  resources:
+  - '*'
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/name: keda-auth-reader
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda-auth-reader
   namespace: keda
 roleRef:
@@ -7618,7 +7609,6 @@ metadata:
   labels:
     app.kubernetes.io/name: keda-hpa-controller-external-metrics
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda-hpa-controller-external-metrics
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -7635,7 +7625,6 @@ metadata:
   labels:
     app.kubernetes.io/name: keda-operator
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda-operator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -7652,7 +7641,6 @@ metadata:
   labels:
     app.kubernetes.io/name: keda-system-auth-delegator
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda:system:auth-delegator
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -7669,7 +7657,6 @@ metadata:
   labels:
     app.kubernetes.io/name: keda-metrics-apiserver
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda-metrics-apiserver
   namespace: keda
 spec:
@@ -7683,7 +7670,6 @@ spec:
   selector:
     app: keda-metrics-apiserver
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -7692,7 +7678,6 @@ metadata:
     app: keda-metrics-apiserver
     app.kubernetes.io/name: keda-metrics-apiserver
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda-metrics-apiserver
   namespace: keda
 spec:
@@ -7701,13 +7686,11 @@ spec:
     matchLabels:
       app: keda-metrics-apiserver
       app.kubernetes.io/part-of: keda-operator
-      app.kubernetes.io/version: 2.1.0
   template:
     metadata:
       labels:
         app: keda-metrics-apiserver
         app.kubernetes.io/part-of: keda-operator
-        app.kubernetes.io/version: 2.1.0
       name: keda-metrics-apiserver
     spec:
       containers:
@@ -7719,7 +7702,7 @@ spec:
         env:
         - name: WATCH_NAMESPACE
           value: ""
-        image: docker.io/kedacore/keda-metrics-apiserver:2.1.0
+        image: kedacore/keda-metrics-apiserver:main
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -7764,7 +7747,6 @@ metadata:
     app.kubernetes.io/component: operator
     app.kubernetes.io/name: keda-operator
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: keda-operator
   namespace: keda
 spec:
@@ -7773,13 +7755,11 @@ spec:
     matchLabels:
       app: keda-operator
       app.kubernetes.io/part-of: keda-operator
-      app.kubernetes.io/version: 2.1.0
   template:
     metadata:
       labels:
         app: keda-operator
         app.kubernetes.io/part-of: keda-operator
-        app.kubernetes.io/version: 2.1.0
         name: keda-operator
       name: keda-operator
     spec:
@@ -7793,7 +7773,7 @@ spec:
         env:
         - name: WATCH_NAMESPACE
           value: ""
-        image: docker.io/kedacore/keda:2.1.0
+        image: kedacore/keda:main
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -7824,7 +7804,6 @@ metadata:
   labels:
     app.kubernetes.io/name: v1beta1.external.metrics.k8s.io
     app.kubernetes.io/part-of: keda-operator
-    app.kubernetes.io/version: 2.1.0
   name: v1beta1.external.metrics.k8s.io
 spec:
   group: external.metrics.k8s.io
