@@ -1,0 +1,6 @@
+instances:
+  - name: configmap-logger
+    data:
+      level: debug
+      LOG_LEVEL: debug
+      LOG_PRINT_SQL: "false"

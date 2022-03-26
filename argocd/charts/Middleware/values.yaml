@@ -1,0 +1,22 @@
+instances:
+  - name: compress-template-test
+    enabled: true
+    spec:
+      compress: {}
+  - name: cors-template-test
+    enabled: true
+    spec:
+      headers:
+        accessControlAllowHeaders:
+          - '*'
+        accessControlAllowMethods:
+          - '*'
+        accessControlAllowOriginList:
+          - '*'
+  - name: http-https-template-test
+    enabled: true
+    spec:
+      redirectScheme:
+        permanent: true
+        port: "443"
+        scheme: https

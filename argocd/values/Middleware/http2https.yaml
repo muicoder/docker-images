@@ -1,0 +1,6 @@
+instances:
+  - name: http-https
+    spec:
+      redirectScheme:
+        permanent: true
+        scheme: https

@@ -1,0 +1,22 @@
+instances:
+  - name: template-test
+    enabled: true
+    immutable: true
+    binaryData:
+      urlencode.sh: IyEvYmluL2Jhc2gKCnVybGVuY29kZSgpIHsKICAgIGlmIFsgJCMgLWx0IDEgXTsgdGhlbgogICAgICAgIGVjaG8gVXNhZ2U6IHVybGVuY29kZSBzdHJpbmcKICAgICAgICByZXR1cm4KICAgIGZpCgogICAgbG9jYWwgTEFORz1DCgogICAgbG9jYWwgYXJnPSIkMSIKICAgIGxvY2FsIGk9IjAiCiAgICB3aGlsZSBbICIkaSIgLWx0ICR7I2FyZ30gXTsgZG8KICAgICAgICBjPSR7YXJnOiRpOjF9CiAgICAgICAgaWYgZ3JlcCAtcSAnW2EtekEtWi86X1wuXC1dJyA8PDwiJGMiOyB0aGVuCiAgICAgICAgICAgIGVjaG8gLW4gIiRjIgogICAgICAgIGVsaWYgWyAiJGMiID0gIiAiIF07IHRoZW4KICAgICAgICAgICAgcHJpbnRmICIrIgogICAgICAgIGVsc2UKICAgICAgICAgICAgcHJpbnRmICIlJSVYIiAiJyRjJyIKICAgICAgICBmaQogICAgICAgIGk9JCgoaSsxKSkKICAgIGRvbmUKfQoKdXJsZW5jb2RlICIkQCIK
+  - name: template-test
+    enabled: true
+    runEnv: test
+    data:
+      _VIRTUALHOST: _VIRTUALHOST
+      _DATABASE: _DATABASE
+      KAFKA_CONSUMER_GROUP_ID: runNamespace
+      KAFKA_DOMAIN_EVENT_TOPIC_PREFIX: lins-domain-message
+      KAFKA_GROUP_: KAFKA_GROUP_
+      KAFKA_TOPIC_: KAFKA_TOPIC_
+      KAFKA_GROUP_AI_: KAFKA_GROUP_AI_
+      KAFKA_TOPIC_AI_: KAFKA_TOPIC_AI_
+      url: https://kubernetes.io/docs/concepts/configuration/configmap/
+      text: |
+        A ConfigMap is an API object used to store non-confidential data in key-value pairs. Pods can consume ConfigMaps as environment variables, command-line arguments, or as configuration files in a volume.
+        ConfigMap 是一种 API 对象，用来将非机密性的数据保存到键值对中。使用时， Pods 可以将其用作环境变量、命令行参数或者存储卷中的配置文件。

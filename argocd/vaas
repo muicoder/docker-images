@@ -1,0 +1,330 @@
+#!/usr/bin/env bash
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# input
+CHARTS_DIR="$SCRIPT_DIR/charts"
+VALUES_DIR="$SCRIPT_DIR/values"
+# output
+DEPLOY_DIR="$SCRIPT_DIR/vaas.generated"
+HELMFILE="$SCRIPT_DIR/helmfile.yaml"
+
+vaas.core() {
+  local values_namespace=${1%:*} values_selected=${1#*:}
+  local values_encrypted=$2
+  local values_dir selected_name
+  local unencrypted decrypted
+  values_dir="$DEPLOY_DIR/$values_namespace"
+  selected_name="${values_selected##*/}"
+  unencrypted="$DEPLOY_DIR/${selected_name/.selected./.unencrypted.}"
+  decrypted="${values_selected/.selected./.decrypted.}"
+  if [[ -s "$unencrypted" ]] && [[ -n "$values_namespace" ]]; then
+    [[ -s "$values_selected" ]] || {
+      echo -n >"$values_selected"
+    }
+    if [[ -s "$values_encrypted" ]]; then
+      sops -d "$values_encrypted" >"$decrypted"
+    else
+      [[ -s "$decrypted" ]] || {
+        echo -n >"$decrypted"
+      }
+    fi
+    # shellcheck disable=SC2016
+    yq ea '((.instances[]|{.name:.})as$item ireduce({};. *$item))as$uniqueMap|($uniqueMap|to_entries|.[])as$item ireduce([];. +$item.value)|sort_by(.name)|sort_keys(..)|{"instances":.}' \
+      "$unencrypted" "$decrypted" "$values_selected" >"${values_selected/.selected./.values.}"
+  fi
+}
+
+declare -A ConfigMap Secret Middleware
+gen_topology() {
+  local instance_file instance
+  declare -A projectMap
+  source "$VALUES_DIR/topology.sh"
+  for proj in ${!projectMap[*]}; do
+    for chart in ${projectMap[$proj]}; do
+      while IFS= read -r instance_file; do
+        while IFS= read -r instance; do
+          case $(basename "$(dirname "$instance_file")") in
+          Secret)
+            Secret["$proj"]="${Secret[$proj]} $instance"
+            ;;
+          ConfigMap)
+            ConfigMap["$proj"]="${ConfigMap[$proj]} $instance"
+            ;;
+          Middleware)
+            Middleware["$proj"]="${Middleware[$proj]} $instance"
+            ;;
+          *)
+            echo "$proj: $instance" >>"$VALUES_DIR/topology.error.$(date +%F).log"
+            ;;
+          esac
+        done < <(grep -E "name: [a-z]" "$instance_file" | awk '{print $NF}')
+      done < <(find "$VALUES_DIR" -type f -name "$chart.y*ml")
+    done
+  done
+  {
+    for key in ${!ConfigMap[*]}; do
+      echo "ConfigMap[$key]=\""
+      for v in ${ConfigMap[$key]}; do
+        echo "$v"
+      done | sort | uniq
+      echo \"
+    done
+    for key in ${!Secret[*]}; do
+      echo "Secret[$key]=\""
+      for v in ${Secret[$key]}; do
+        echo "$v"
+      done | sort | uniq
+      echo \"
+    done
+    for key in ${!Middleware[*]}; do
+      echo "Middleware[$key]=\""
+      for v in ${Middleware[$key]}; do
+        echo "$v"
+      done | sort | uniq
+      echo \"
+    done
+  } >"$VALUES_DIR/vaas.topology"
+}
+
+runEnv() {
+  local namespace=$1
+  if [[ "$namespace" =~ .-(dev|test)[0-9]* ]]; then
+    echo "${namespace##*-}"
+  else
+    echo "prod"
+  fi
+}
+
+gen_namespaces() {
+  local repoEnv runEnv
+  repoEnv=$(basename "$SCRIPT_DIR")
+  runEnv=$(echo "$repoEnv" | awk -F_ '{print $(NF-1)}')
+  if [[ $runEnv =~ yichang ]]; then
+    grep "$runEnv" "$VALUES_DIR/.namespaces" || true
+  elif [[ $runEnv =~ dianjun ]]; then
+    grep -v "yichang" "$VALUES_DIR/.namespaces" || true
+  else
+    cat "$VALUES_DIR/.namespaces"
+  fi
+}
+
+gen_selection() {
+  local kind namespace
+  local selected runEnv runProj
+  while IFS= read -r kind; do
+    while IFS= read -r namespace; do
+      selected="$DEPLOY_DIR/$namespace/$kind.selected.yaml"
+      runEnv=$(runEnv "$namespace")
+      runProj=${namespace%-*}
+      {
+        echo "instances:"
+        case $kind in
+        ConfigMap)
+          for proj in ${!ConfigMap[*]}; do
+            if [[ "all" == "$proj" ]] || [[ $runProj == "$proj" ]]; then
+              for v in ${ConfigMap[$proj]}; do
+                echo "  - name: $v"
+                echo "    enabled: true"
+                echo "    runEnv: $runEnv"
+              done
+            else
+              continue
+              for v in ${ConfigMap[$proj]}; do
+                echo "  - name: $v"
+                echo "    enabled: false"
+              done
+            fi
+          done
+          ;;
+        Secret)
+          for proj in ${!Secret[*]}; do
+            if [[ "all" == "$proj" ]] || [[ $runProj == "$proj" ]]; then
+              for v in ${Secret[$proj]}; do
+                echo "  - name: $v"
+                echo "    enabled: true"
+                echo "    runEnv: $runEnv"
+              done
+            else
+              continue
+              for v in ${Secret[$proj]}; do
+                echo "  - name: $v"
+                echo "    enabled: false"
+              done
+            fi
+          done
+          ;;
+        Middleware)
+          for proj in ${!Middleware[*]}; do
+            if [[ "all" == "$proj" ]] || [[ $runProj == "$proj" ]]; then
+              for v in ${Middleware[$proj]}; do
+                echo "  - name: $v"
+                echo "    enabled: true"
+                echo "    runEnv: $runEnv"
+              done
+            else
+              continue
+              for v in ${Middleware[$proj]}; do
+                echo "  - name: $v"
+                echo "    enabled: false"
+              done
+            fi
+          done
+          ;;
+        esac
+      } >"$selected"
+    done < <(gen_namespaces)
+  done <"$VALUES_DIR/.kinds"
+}
+
+gen_decryption() {
+  local kind namespace
+  local encrypted decrypted project_env
+  local encrypted_files
+  while IFS= read -r namespace; do
+    while IFS= read -r kind; do
+      encrypted="$VALUES_DIR/$kind.encrypted.yaml"
+      mapfile -t encrypted_files < <(find "$VALUES_DIR" -type f -name "$kind.encrypted.[[:alpha:]]*.yaml")
+      if [[ ${#encrypted_files[@]} -gt 0 ]]; then
+        for encrypted_file in "${encrypted_files[@]}"; do
+          project_env=$(awk -F. '{print $(NF-1)}' <<<"$encrypted_file")
+          if [[ $project_env == "$namespace" ]] ||
+            [[ ${namespace##*-} =~ $project_env ]]; then
+            encrypted="$encrypted_file"
+          fi
+        done
+      fi
+      decrypted="${encrypted/.encrypted./.decrypted.}"
+      [[ -s "$decrypted" ]] || sops -d "$encrypted" >"$decrypted"
+      cp -a "$decrypted" "$DEPLOY_DIR/$namespace/$kind.decrypted.yaml"
+    done <"$VALUES_DIR/.kinds"
+  done < <(gen_namespaces)
+}
+
+gen_helmfile() {
+  local namespace kind
+  declare -a concurrencyQueue
+  if [[ -e /.dockerenv ]]; then
+    curl --silent --insecure \
+      --header "Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+      https://kubernetes.default/api/v1/namespaces | yq e '.items[].metadata.name' -
+  else
+    if [[ -n $VAAS ]]; then
+      kubectl get namespaces --no-headers
+    else
+      echo 'kube-public                       Active   55d'
+      echo 'kube-system                       Active   55d'
+    fi | awk '{print $1}'
+  fi | sort >"$VALUES_DIR/.namespaces" 2>/dev/null
+  while IFS= read -r kind; do
+    echo "${kind##*/}"
+  done < <(find "$VALUES_DIR" -type d -name '[A-Z]*') | sort >"$VALUES_DIR/.kinds"
+  while IFS= read -r namespace; do
+    mkdir -p "$DEPLOY_DIR/$namespace"
+  done < <(gen_namespaces) && {
+    gen_selection
+    gen_decryption
+  }
+  # vaas.core
+  while IFS= read -r kind; do
+    # shellcheck disable=SC2016,SC2046
+    [[ -s "$DEPLOY_DIR/$kind.unencrypted.yaml" ]] || {
+      yq ea '((.instances[]|{.name:.})as$item ireduce({};. *$item))as$uniqueMap|($uniqueMap|to_entries|.[])as$item ireduce([];. +$item.value)|sort_by(.name)|sort_keys(..)|{"instances":.}' \
+        $(find "$VALUES_DIR/$kind" -type f) >"$DEPLOY_DIR/$kind.unencrypted.yaml"
+      yq e '(.[]|sort_by(.name)|unique_by(.name)|(.[]|[.name])' "$DEPLOY_DIR/$kind.unencrypted.yaml" |
+        awk '{print $NF}' >"$VALUES_DIR/$kind.instances.txt"
+    }
+    while IFS= read -r namespace; do
+      if [[ $(uname) == Linux ]]; then
+        vaas.core "$namespace:$DEPLOY_DIR/$namespace/$kind.selected.yaml" "$DEPLOY_DIR/$namespace/$kind.encrypted.yaml" &
+        concurrencyQueue=("${concurrencyQueue[@]}" $!)
+        if [[ ${#concurrencyQueue[@]} -eq $(($(nproc) / 2 + 1)) ]]; then
+          wait
+          concurrencyQueue=()
+        fi
+      else
+        vaas.core "$namespace:$DEPLOY_DIR/$namespace/$kind.selected.yaml" "$DEPLOY_DIR/$namespace/$kind.encrypted.yaml"
+      fi
+    done < <(gen_namespaces)
+    wait
+  done <"$VALUES_DIR/.kinds"
+  # helmfile
+  cat <<EOF >"$HELMFILE"
+releases:
+EOF
+  while IFS= read -r kind; do
+    while IFS= read -r namespace; do
+      cat <<EOF >>"$HELMFILE"
+  - chart: $CHARTS_DIR/$kind
+    name: ${kind}_${namespace}
+    namespace: $namespace
+EOF
+      if [[ -s "$DEPLOY_DIR/$namespace/$kind.values.yaml" ]]; then
+        cat <<EOF >>"$HELMFILE"
+    values:
+      - $DEPLOY_DIR/$namespace/$kind.values.yaml
+EOF
+      fi
+      if [[ -s "$DEPLOY_DIR/$namespace/$kind.secrets.yaml" ]]; then
+        cat <<EOF >>"$HELMFILE"
+    values:
+      - $DEPLOY_DIR/$namespace/$kind.secrets.yaml
+EOF
+      fi
+    done < <(gen_namespaces)
+  done <"$VALUES_DIR/.kinds"
+}
+
+__check_deps() {
+  local count=0
+  for bin in "$@"; do
+    command -v "$bin" >/dev/null || {
+      ((++count))
+      echo -en "Please INSTALL\t$bin\t\t"
+      case $bin in
+      yq)
+        echo "https://github.com/mikefarah/yq/releases"
+        ;;
+      sops)
+        echo "https://github.com/mozilla/sops/releases"
+        ;;
+      helm)
+        echo "https://github.com/helm/helm/releases"
+        ;;
+      helmfile)
+        echo "https://github.com/roboll/helmfile/releases"
+        ;;
+      kubectl)
+        echo "https://github.com/kubernetes/kubernetes/releases"
+        ;;
+      *)
+        echo "https://github.com/search?q=$bin"
+        ;;
+      esac
+    }
+  done
+  ((count == 0)) || {
+    echo
+    echo -en "GitHub[Acceleration Download]\thttps://ghproxy.com/"
+    echo
+    exit
+  }
+}
+
+rm -rf "$DEPLOY_DIR"
+if [[ -e /.dockerenv ]]; then
+  __check_deps yq sops helm helmfile
+else
+  __check_deps yq sops helm helmfile kubectl
+fi
+
+gen_topology
+source "$VALUES_DIR/vaas.topology"
+gen_helmfile
+
+test -s "$HELMFILE"
+
+if [[ -n $VAAS ]]; then
+  helmfile -f "$HELMFILE" template --skip-deps --output-dir "$DEPLOY_DIR/__helmfile__" 2>/dev/null
+fi

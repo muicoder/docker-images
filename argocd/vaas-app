@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ -e /.dockerenv ]]; then
+  CLUSTER=$(awk -F_ '{print $(NF-1)}' <<<"$SCRIPT_DIR")
+else
+  CLUSTER=$(awk -F/ '{print $(NF-1)}' <<<"$SCRIPT_DIR")
+fi
+APP_BRANCH="master"
+APP_ROOT="yaml/app"
+
+argocd_apps() {
+  local app_dir=$1
+  cat <<EOF
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ${app_dir//\//.}
+  namespace: argocd
+spec:
+  destination:
+    name: in-cluster
+    namespace: $(awk -F/ '{print $(NF-1)}' <<<"$app_dir")
+  project: default
+  source:
+    directory:
+      recurse: true
+    path: $app_dir
+    repoURL: git@gitlab.sensoro.com:appstore/$CLUSTER/app.git
+    targetRevision: $APP_BRANCH
+  syncPolicy:
+    automated: {}
+    syncOptions:
+    - ApplyOutOfSyncOnly=true
+    - CreateNamespace=true
+EOF
+}
+
+while IFS= read -r app_dir; do
+  argocd_apps "$app_dir"
+done < <(
+  while IFS= read -r f; do
+    echo "${f%/*}"
+  done < <(find $APP_ROOT -type f -name '*.yaml') | sort | uniq
+) | tee /tmp/vaas-app.yaml

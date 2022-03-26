@@ -1,0 +1,10 @@
+instances:
+  - name: cors
+    spec:
+      headers:
+        accessControlAllowHeaders:
+          - '*'
+        accessControlAllowMethods:
+          - '*'
+        accessControlAllowOriginList:
+          - '*'

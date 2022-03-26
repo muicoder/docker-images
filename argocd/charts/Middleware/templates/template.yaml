@@ -1,0 +1,16 @@
+{{- $namespace := .Release.Namespace }}
+{{- range $idx, $value := .Values.instances }}
+{{- if $value.enabled }}
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  {{- if hasSuffix "template-test" $value.name }}
+  name: {{ $value.name }}-{{randNumeric 10}}
+  {{- else }}
+  name: {{ $value.name }}
+  {{- end }}
+  namespace: {{ $namespace }}
+spec: {{ $value.spec | toYaml | nindent 2 }}
+{{- end }}
+{{- end }}
