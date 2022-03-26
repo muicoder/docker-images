@@ -1,0 +1,12 @@
+apiVersion: sre.io/v1
+kind: Application
+metadata:
+  name: alpine
+  namespace: default
+spec:
+  image: alpine:edge
+  command:
+    - crond
+    - -f
+  port: 80
+  replicas: 2

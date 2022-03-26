@@ -1,0 +1,98 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  name: octant
+  labels:
+    app.kubernetes.io/name: octant
+spec:
+  terminationGracePeriodSeconds: 0
+  containers:
+    - name: octant
+      image: alpine:edge
+      ports:
+        - containerPort: 7777
+          name: http
+      command:
+        - sh
+        - -ce
+        - |-
+          octant_version="0.25.1"
+          octant_path="octant_${octant_version}_Linux-64bit"
+          wget -O- "https://ghproxy.com/https://github.com/vmware-tanzu/octant/releases/download/v$octant_version/$octant_path.tar.gz" | tar xzv
+          
+          for path in $(echo "$PATH" | sed 's/:/ /g'); do
+            if [ -x "$path/octant" ]; then
+              continue
+            else
+              [ -d "$path" ] || mkdir -p "$path"
+              cp -av "$octant_path/octant" "$path"
+            fi
+            break
+          done
+          octant \
+          --listener-addr 0.0.0.0:7777 \
+          --disable-cluster-overview \
+          --disable-open-browser \
+          --disable-origin-check \
+          --enable-feature-applications \
+          --namespace default
+  enableServiceLinks: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: octant
+  name: octant
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: octant
+  type: ClusterIP
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  labels:
+    app.kubernetes.io/name: octant
+  name: octant-http
+  namespace: default
+spec:
+  entryPoints:
+    - web
+  routes:
+    - kind: Rule
+      match: HostRegexp(`octant.xxxx.com`)
+      middlewares:
+        - name: middleware-http-https-common
+      services:
+        - name: kubernetes
+          namespace: default
+          port: 443
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  labels:
+    app.kubernetes.io/name: octant
+  name: octant-https
+  namespace: default
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - kind: Rule
+      match: HostRegexp(`octant.xxxx.com`)
+      services:
+        - name: octant
+          namespace: default
+          port: 80
+  tls:
+    secretName: secret-tls-xxxx-com
