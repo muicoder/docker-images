@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: burrow
+spec:
+  template:
+    spec:
+      containers:
+        - env:
+            - name: DINGTALK_TOKENS
+              value: "" # xxxx-prod=debug=0123456789abcdef-64-0123456789abcdef,test=0123456789abcdef-64-0123456789abcdef
+            - name: WECOM_TOKENS
+              value: "" # xxxx-prod=debug=012345678-abcd-bcde-cdef-0123456789ab,test=012345678-abcd-bcde-cdef-0123456789ab
+          name: burrow

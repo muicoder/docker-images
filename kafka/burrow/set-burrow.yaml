@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: burrow
+spec:
+  template:
+    spec:
+      containers:
+        - env:
+            - name: AUTO_RELOAD
+              value: "1"
+            - name: VERSION
+              value: 1.6.0
+          name: burrow

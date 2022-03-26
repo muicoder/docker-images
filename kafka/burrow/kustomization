@@ -1,0 +1,11 @@
+generatorOptions:
+  disableNameSuffixHash: true
+namespace: default
+patchesStrategicMerge:
+  - set-burrow.yaml
+  - set-kafka.yaml
+  - set-webhook.yaml
+resources:
+  - deployment.yaml
+  - svc.yaml
+  - monitor.yaml

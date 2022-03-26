@@ -1,0 +1,57 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaBridge
+metadata:
+  name: lins
+  namespace: kafka
+spec:
+  replicas: 1
+  bootstrapServers: lins-kafka-bootstrap:9093
+  enableMetrics: true
+  http:
+    port: 8080
+    cors:
+      allowedOrigins:
+      - "*"
+      allowedMethods:
+      - "*"
+  jvmOptions:
+    -XX:
+      ExitOnOutOfMemoryError: true
+      UseContainerSupport: true
+      MaxRAMPercentage: 75.0
+      InitialRAMPercentage: 50.0
+      MinRAMPercentage: 50.0
+    gcLoggingEnabled: true
+    javaSystemProperties:
+      - name: file.encoding
+        value: UTF-8
+  livenessProbe:
+    initialDelaySeconds: 15
+  readinessProbe:
+    initialDelaySeconds: 15
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  template:
+    bridgeContainer:
+      env:
+        - name: TZ
+          value: Asia/Shanghai
+    pod:
+      enableServiceLinks: false
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kafka
+                operator: Exists
+  tls:
+    trustedCertificates:
+      - certificate: ca.crt
+        secretName: lins-cluster-ca-cert
+

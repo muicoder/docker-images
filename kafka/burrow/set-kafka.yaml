@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: burrow
+spec:
+  template:
+    spec:
+      containers:
+        - env:
+            - name: CLUSTERS
+              value: "" # xxxx-prod=192.168.xx.xx:9092,192.168.xx.xx:9092
+            - name: CLUSTERS_VERSION # Used when getting the consumer group exception
+              value: "" # xxxx-prod=1.1.1
+            - name: CONSUMERS # Used when the consumer group offsets stored in zookeeper, "/kafka/cl-xxxxxxxx" is "zookeeepr.path" for kafka.
+              value: "" # xxxx-prod=192.168.xx.xx:2181,192.168.xx.xx:2181=/kafka/cl-xxxxxxxx
+          name: burrow

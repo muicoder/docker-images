@@ -1,0 +1,27 @@
+FROM quay.io/coreos/etcd:v3.3.27 as etcd
+FROM quay.io/coreos/zetcd:v0.0.5 as zetcd
+FROM edenhill/kcat:1.7.1 as kcat
+
+FROM golang:1.20-alpine as builder
+ARG git_user=muicoder
+ARG git_repo=Burrow
+ARG git_branch=action
+ENV CGO_ENABLED=0
+RUN set -ex && \
+  wget -qO- https://github.com/$git_user/$git_repo/archive/refs/heads/$git_branch.tar.gz | tar -xz && \
+  cd $git_repo-$git_branch && \
+  go get -u all && go mod verify && go mod tidy && \
+  go build -trimpath -ldflags '-s -w -extldflags "-static"' -o $GOPATH/bin/burrow && \
+  go install -ldflags '-s -w -extldflags "-static"' github.com/etcd-io/zetcd/cmd/zkboom@latest && \
+  go install -ldflags '-s -w -extldflags "-static"' github.com/etcd-io/zetcd/cmd/zkctl@latest && \
+  ls -lh $GOPATH/bin
+
+FROM alpine:edge as cached
+COPY --from=etcd /usr/local/bin/etcd* /cached/
+COPY --from=zetcd /usr/local/bin/zetcd* /cached/
+COPY --from=builder /go/bin/* /cached/
+COPY --from=kcat /usr/bin/kcat /cached/
+# kcat on libcrypto1.1+libssl1.1
+FROM alpine:3.16
+RUN apk add --no-cache curl jq wget tzdata libcurl lz4-libs zstd-libs ca-certificates openssl
+COPY --from=cached /cached /usr/local/bin/

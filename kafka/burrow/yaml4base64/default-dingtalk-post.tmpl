@@ -1,0 +1,42 @@
+{"msgtype": "markdown","markdown": {"title":"Kafka LagChecker", "text": "
+{{- $StatusURL := "https://pkg.go.dev/github.com/linkedin/Burrow/core/protocol#StatusConstant"}}
+{{- $FormatString := "2006-01-02 15:04:05"}}
+# Kafka: {{.Cluster}}
+消费组👉{{.Group}}{{- with .Result.Status}}
+{{- if eq . 0}}NotFound{{end}}
+{{- if eq . 1}}正常{{end}}
+{{- if eq . 2}}滞后{{end}}
+{{- if eq . 3}}异常{{end}}
+{{- end}}
+**Status:** Total(Partitions={{.Result.TotalPartitions}},Lag={{.Result.TotalLag}})[{{- with .Result.Status}}
+{{- if eq . 0}}NotFound{{end}}
+{{- if eq . 1}}{{.}}{{end}}
+{{- if eq . 2}}{{.}}{{end}}
+{{- if eq . 3}}{{.}}{{end}}
+{{- end}}]({{$StatusURL}})👈{{printf "%.2f" .Result.Complete}}
+{{- if eq .Result.Status 1 }}
+**MaxLagDetails:**
+{{- with .Result.Maxlag}}
+{{.Topic}}[{{.Status.String}}](){{printf "%.2f" .Complete}}
+\tPartition={{.Partition}}📈Lag={{.CurrentLag}}{{if .Owner}}ℹ️{{.Owner}}/{{end}}{{if .ClientID}}{{.ClientID}}{{end}}
+{{- end}}
+{{- end}}
+{{- $TotalErrors := len .Result.Partitions}}
+{{- if $TotalErrors}}
+### {{$TotalErrors}} partitions have problems(MaxLag={{.Result.Maxlag|maxlag}})
+>**CountPartitions:**
+{{- range $k,$v := .Result.Partitions|partitioncounts}}
+{{- if ne $v 0}}\n\t{{$k}}={{$v}}{{end}}
+{{- end}}
+**TopicsByStatus:**
+{{- range $k,$v := .Result.Partitions|topicsbystatus}}
+\t{{$k}}={{$v}}
+{{- end}}
+**PartitionDetails:**
+{{- range .Result.Partitions}}
+{{.Topic}}[{{.Status.String}}](){{printf "%.2f" .Complete}}
+\tPartition={{.Partition}}📈Lag={{.CurrentLag}}{{if .Owner}}ℹ️{{.Owner}}/{{end}}{{if .ClientID}}{{.ClientID}}{{end}}
+{{- end}}
+{{- end}}
+"
+}}

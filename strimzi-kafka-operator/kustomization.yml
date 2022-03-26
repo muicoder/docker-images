@@ -1,0 +1,12 @@
+helmCharts:
+  - name: chart
+    Namespace: ""
+    releaseName: strimzi-kafka-operator
+    ValuesFile: ""
+    ValuesInline:
+      tmpDirSizeLimit: 5Mi
+    ValuesMerge: override # merge, override, replace
+    includeCRDs: true
+helmGlobals:
+  chartHome: .
+namespace: kafka

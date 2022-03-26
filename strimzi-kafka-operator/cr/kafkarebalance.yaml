@@ -1,0 +1,17 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaRebalance
+metadata:
+    name: lins
+    namespace: kafka
+    labels:
+        strimzi.io/cluster: lins
+spec:
+    concurrentIntraBrokerPartitionMovements: 2
+    concurrentLeaderMovements: 1000
+    concurrentPartitionMovementsPerBroker: 5
+    excludedTopics:
+    goals:
+        - CpuCapacityGoal
+    skipHardGoalCheck: true
+    replicaMovementStrategies:
+    replicationThrottle:
