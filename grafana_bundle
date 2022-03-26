@@ -1,0 +1,86 @@
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+cd "$SCRIPT_DIR"
+
+if [[ -e /.dockerenv ]]; then
+  while read -r f; do
+    echo ---
+    cat "$f"
+  done < <(find . -name "*.yaml" -type f)
+  exit
+fi
+
+CACHED="$SCRIPT_DIR/cached"
+DEFAULT_NAMESPACE="monitoring"
+DEFAULT_datasourceName="lins"
+
+INPUT=${1?Please input \"bundle [$DEFAULT_NAMESPACE(namespace)] [$DEFAULT_datasourceName(datasourceName)]\"}
+NAMESPACE=${2:-$DEFAULT_NAMESPACE}
+datasourceName="${3:-$DEFAULT_datasourceName}"
+
+command -v kustomize >/dev/null || {
+  KUSTOMIZE_VERSION="4.5.2"
+  wget -O- "https://ghproxy.com/https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v$KUSTOMIZE_VERSION/kustomize_v${KUSTOMIZE_VERSION}_$(uname)_amd64.tar.gz" | tar -xz
+  mv kustomize "${PATH%%:*}"
+}
+
+case $INPUT in
+bundle)
+  echo configMapGenerator
+  KUSTOMIZATION="$CACHED/kustomization.yml"
+  $(which rm) -f "${KUSTOMIZATION%.*}"*
+  cat <<EOF >"$KUSTOMIZATION"
+generatorOptions:
+  disableNameSuffixHash: true
+namespace: $NAMESPACE
+configMapGenerator:
+EOF
+  while read -r f; do
+    name=${f##*/}
+    cat <<EOF >>"$KUSTOMIZATION"
+- name: $name
+  files:
+  - $name
+EOF
+  done < <(find "$CACHED" -name "*.json" -type f)
+  kustomize build "${KUSTOMIZATION%/*}" >"$CACHED/bundles.yaml"
+  echo GrafanaDashboard.yml
+  while read -r f; do
+    name=${f##*/}
+    cat <<EOF >"GrafanaDashboard/$name.yml"
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDashboard
+metadata:
+  name: $name
+  namespace: $NAMESPACE
+  labels:
+    app: grafana
+spec:
+  customFolderName: ""
+  datasources:
+  - datasourceName: $datasourceName
+    inputName: DS_PROMETHEUS
+  configMapRef:
+    name: $name
+    key: $name
+EOF
+  done < <(find "$CACHED" -name "*.json" -type f)
+  echo bundles.yaml
+  while read -r d; do
+    kind=${d##*/}
+    KUSTOMIZATION="$kind/kustomization.yml"
+    $(which rm) -f "${KUSTOMIZATION%.*}"*
+    cat <<EOF >"$KUSTOMIZATION"
+namespace: $NAMESPACE
+resources:
+$(while read -r f; do echo "- ./${f#*"$kind/"}"; done < <(find "$kind" -type f -name "*.yml" | grep -v kustomization | sort))
+EOF
+    kustomize build "${KUSTOMIZATION%/*}" >"$kind/bundles.yaml"
+  done < <(find "$SCRIPT_DIR" -type d -name 'G*')
+  ;;
+esac

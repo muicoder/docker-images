@@ -1,0 +1,35 @@
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+kubectl version
+# https://github.com/itaysk/kubectl-neat/releases
+kubectl neat -h >/dev/null || {
+  echo -e "Please INSTALL kubectl-neat:\n\thttps://github.com/itaysk/kubectl-neat/releases"
+  exit
+}
+
+function yaml_write() {
+  local name=$1 ns=$2
+  local cached="yaml.cached/$ns/${name%%/*}"
+  mkdir -p "$cached"
+  if [[ -z $ns ]]; then
+    kubectl neat get -- "$name" -oyaml --no-headers >"$cached/${name#*/}".yaml
+  else
+    kubectl describe "$name" -n "$ns" | grep -E '(Controlled By):' &>/dev/null ||
+      kubectl neat get -- "$name" -oyaml --no-headers -n "$ns" >"$cached/${name#*/}".yaml
+  fi
+}
+
+for kind in $(kubectl api-resources | grep monitoring.coreos.com | awk '{print $NF}'); do
+  while IFS= read -r l; do
+    NAMESPACE=$(echo "$l" | awk '{print $1}')
+    NAME=$(echo "$l" | awk '{print $2}')
+    echo "$NAMESPACE::$kind/$NAME"
+    yaml_write "$kind/$NAME" "$NAMESPACE"
+  done < <(kubectl get "$kind" --all-namespaces --no-headers | grep -v gen-)
+done
+
+find yaml.cached -empty -delete

@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+
+set -e
+
+RULES_IN="${1:-rules.yml}"
+RULES_OUT="cached/rules.n9e"
+
+$(which rm) -rf "./$RULES_OUT"
+mkdir -p "$RULES_OUT"
+
+function gen_rules4n9e() {
+  local rules_yml=$1
+  local rules_raw rules_list
+  local rules_out out_prefix
+  if [[ -f "$rules_yml" ]]; then
+    rules_raw=$(yq <"$rules_yml" e '[.]' -o=json -I0)
+    out_prefix="$RULES_OUT/${rules_yml##*/}"
+    shift
+  else
+    rules_raw=$(kubectl get PrometheusRule --all-namespaces -o jsonpath='{.items}')
+    out_prefix="$RULES_OUT/inCluster.json"
+  fi
+  local group rule line rule_duration
+  local multi_severity severity
+  local multi_duration duration
+  # shellcheck disable=SC2016
+  local YQ_N9E='as $rule ireduce({};. * {"name":$rule.alert,"note":$rule.annotations.summary,"severity":$rule.labels.severity,"disabled": 0,"enable_stime":"00:00","enable_etime":"23:59","enable_days_of_week":["1","2","3","4","5","6","0"],"enable_in_bg":0,"prom_for_duration":env(for_duration),"prom_ql":$rule.expr,"notify_recovered":1,"notify_channels":["wecomapp"],"notify_repeat_step":3,"recover_duration":60})'
+  while IFS= read -r group; do
+    rules_out="${out_prefix%.*}.${group//\//_}.json"
+    rules_list=$(yq <<<"$rules_raw" e ".[].spec.groups[]|select(.name==\"$group\").rules[].alert" | sort | uniq)
+    if [[ $rules_list != null ]]; then
+      echo "group::$group => $rules_out"
+      while IFS= read -r rule; do
+        multi_duration=$(yq <<<"$rules_raw" e ".[].spec.groups[]|select(.name==\"$group\").rules[]|select(.alert==\"$rule\").for")
+        multi_severity=$(yq <<<"$rules_raw" e ".[].spec.groups[]|select(.name==\"$group\").rules[]|select(.alert==\"$rule\").labels.severity")
+        while IFS= read -r severity; do
+          while IFS= read -r duration; do
+            rule_duration=$duration
+            case $rule_duration in
+            [0-9]*m)
+              rule_duration=$((${rule_duration%m*} * 60))
+              ;;
+            [0-9]*h)
+              rule_duration=$((${rule_duration%h*} * 3600))
+              ;;
+            [0-9]*d)
+              rule_duration=$((${rule_duration%d*} * 86400))
+              ;;
+            *)
+              rule_duration=60
+              ;;
+            esac
+            for_duration=$rule_duration yq <<<"$rules_raw" e ".[].spec.groups[]|select(.name==\"$group\").rules[]|select(.alert==\"$rule\") $YQ_N9E |.name|=sub(\">\",\"gt\")|.name|=sub(\"<\",\"lt\")| [.name=\"$severity(${rule_duration}s)::\"+.name]"
+            if [[ ${#@} -ne 0 ]]; then
+              echo "  append_tags:"
+              for tag; do echo "  - $tag"; done
+            fi
+          done <<<"$multi_duration"
+        done <<<"$multi_severity"
+      done <<<"$rules_list" | while IFS= read -r line; do
+        echo "    $line"
+      done | sed '/: null$/d' |
+        sed -e 's/severity: "critical"/severity: 2/g;s/severity: "warning"/severity: 2/;s/severity: ".*"/severity: 3/g' |
+        yq e . -o=json >"$rules_out"
+    fi
+  done < <(yq <<<"$rules_raw" e '.[].spec.groups[].name')
+}
+
+__check_deps() {
+  local count=0
+  for bin in "$@"; do
+    command -v "$bin" >/dev/null || {
+      ((++count))
+      echo -en "Please INSTALL\t$bin\t\t"
+      case $bin in
+      yq)
+        echo "https://github.com/mikefarah/yq/releases"
+        ;;
+      sops)
+        echo "https://github.com/mozilla/sops/releases"
+        ;;
+      helm)
+        echo "https://github.com/helm/helm/releases"
+        ;;
+      helmfile)
+        echo "https://github.com/roboll/helmfile/releases"
+        ;;
+      kubectl)
+        echo "https://github.com/kubernetes/kubernetes/releases"
+        ;;
+      *)
+        echo "https://github.com/search?q=$bin"
+        ;;
+      esac
+    }
+  done
+  ((count == 0)) || {
+    echo
+    echo -en "GitHub[Acceleration Download]\thttps://ghproxy.com/"
+    echo
+    exit
+  }
+}
+
+__check_deps yq
+
+if [[ -d "$RULES_IN" ]]; then
+  shift
+  for f in "$RULES_IN"/*.y*ml; do
+    gen_rules4n9e "$f" "$@"
+  done
+  # shellcheck disable=SC2016
+  yq '((.[]|{.name:.})as$item ireduce({};. *$item))as$uniqueMap|($uniqueMap|to_entries|.[])as$item ireduce([];. +$item.value)|sort_by(.name)|sort_keys(..)' "$RULES_OUT"/*.json --no-doc | yq '[.[]]' -I0 -o=json >"$RULES_OUT.json"
+else
+  if [[ -s "$RULES_IN" ]]; then
+    gen_rules4n9e "$@"
+  else
+    gen_rules4n9e "$@"
+  fi
+fi

@@ -1,0 +1,53 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: generate-service-monitor
+  namespace: monitoring
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 3600
+      backoffLimit: 0
+      completions: 1
+      parallelism: 1
+      template:
+        spec:
+          containers:
+            - command:
+                - sh
+                - -c
+                - |-
+                  # namespace=monitoring
+                  # kubectl create clusterrolebinding --clusterrole cluster-admin --serviceaccount $namespace:generate-service-monitor generate-service-monitor
+                  # kubectl create serviceaccount generate-service-monitor -n $namespace
+                  echo "" | base64 -d > "$HOSTNAME.sh"
+                  bash "$HOSTNAME.sh"
+                  tar -zcf "/$(date +%F).tar.gz" $(find "/tmp/yaml.cached" -type f)
+              env:
+                - name: CLUSTER
+                  value: kubernetes
+                - name: METRICS
+                  value: metrics prometheus
+              image: flant/shell-operator:v1.2.0
+              imagePullPolicy: IfNotPresent
+              name: generate-service-monitor
+              volumeMounts:
+                - mountPath: /tmp/yaml.cached
+                  name: generate
+          enableServiceLinks: false
+          nodeSelector:
+            monitoring: ""
+          restartPolicy: Never
+          serviceAccountName: generate-service-monitor
+          shareProcessNamespace: true
+          volumes:
+            - emptyDir:
+                medium: Memory
+                sizeLimit: 100Mi
+              name: generate
+  schedule: 15 3 * * ?
+  startingDeadlineSeconds: 60
+  successfulJobsHistoryLimit: 1
+  suspend: false

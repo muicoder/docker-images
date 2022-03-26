@@ -1,0 +1,109 @@
+apiVersion: integreatly.org/v1alpha1
+kind: Grafana
+metadata:
+  name: strimzi
+spec:
+  baseImage: grafana/grafana:7.5.15
+  client:
+    preferService: true
+    timeout: 5
+  config:
+    auth:
+      disable_login_form: false
+      disable_signout_menu: false
+    auth.anonymous:
+      enabled: false
+    log:
+      level: warn
+      mode: console
+    log.frontend:
+      enabled: true
+    panels:
+      disable_sanitize_html: true
+    plugins:
+      enable_alpha: true
+    security:
+      admin_password: admin
+      admin_user: admin
+      allow_embedding: true
+    server:
+      root_url: /
+      serve_from_sub_path: true
+    users:
+      viewers_can_edit: true
+  containers:
+    - args:
+        - -ce
+        - |
+          # uid=472(grafana)
+          GRAFANA_DATA=/var/lib/grafana
+          GRAFANA_PLUGINS="$GRAFANA_DATA/plugins"
+          ls -l "$GRAFANA_PLUGINS"
+          chown 472:472 -R "$GRAFANA_DATA"
+          ls -l "$GRAFANA_PLUGINS"
+          if [ -x "$GRAFANA_PLUGINS/asmttpd" ]; then
+            exec "$GRAFANA_PLUGINS/asmttpd" "$GRAFANA_PLUGINS" 8000
+          else
+            asmttpd_version=0.4.5
+            wget -P "$GRAFANA_PLUGINS" "https://ghproxy.com/https://github.com/nemasu/asmttpd/releases/download/$asmttpd_version/asmttpd" || sleep infinity
+            chmod +x "$GRAFANA_PLUGINS/asmttpd"
+          fi
+      command:
+        - sh
+        - -c
+      env:
+        - name: TZ
+          value: Asia/Shanghai
+      image: alpine:edge
+      imagePullPolicy: Always
+      name: grafana-plugins-chown
+      volumeMounts:
+        - mountPath: /var/lib/grafana
+          name: grafana-data
+        - mountPath: /var/lib/grafana/plugins
+          name: grafana-data
+          subPath: plugins
+      workingDir: /var/lib/grafana/plugins
+  dashboardLabelSelector:
+    - matchExpressions:
+        - key: app
+          operator: In
+          values:
+            - grafana
+    - matchExpressions:
+        - key: group
+          operator: In
+          values:
+            - grafana
+  dataStorage:
+    accessModes:
+      - ReadWriteOnce
+    class: local-path
+    size: 50Gi
+  deployment:
+    env:
+      - name: TZ
+        value: Asia/Shanghai
+    extraVolumeMounts:
+      - mountPath: /var/lib/grafana/plugins
+        name: grafana-data
+        subPath: plugins
+    nodeSelector:
+      devops: enabled
+    replicas: 1
+    skipCreateAdminAccount: false
+  ingress:
+    enabled: false
+  livenessProbeSpec:
+    initialDelaySeconds: 5
+  readinessProbeSpec:
+    initialDelaySeconds: 5
+  resources:
+    limits:
+      cpu: 2
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  service:
+    type: ClusterIP

@@ -1,0 +1,50 @@
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+cd "$SCRIPT_DIR"
+
+CACHED="$SCRIPT_DIR/cached"
+DEFAULT_VERSION="4.3.0"
+DEFAULT_NAMESPACE="default"
+
+INPUT=${1?Please input \"$DEFAULT_VERSION\" | \"build [$DEFAULT_NAMESPACE(namespace)]\"}
+NAMESPACE=${2:-$DEFAULT_NAMESPACE}
+
+command -v kustomize >/dev/null || {
+  KUSTOMIZE_VERSION="4.5.2"
+  wget -O- "https://ghproxy.com/https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v$KUSTOMIZE_VERSION/kustomize_v${KUSTOMIZE_VERSION}_$(uname)_amd64.tar.gz" | tar -xz
+  mv kustomize "${PATH%%:*}"
+}
+
+case $INPUT in
+build)
+  KUSTOMIZATION="$CACHED/kustomization.yml"
+  $(which rm) -f "${KUSTOMIZATION%.*}"*
+  cat <<EOF >"$KUSTOMIZATION"
+resources:
+$(while read -r f; do echo "- ./${f#*"$CACHED/"}"; done < <(find "$CACHED" -type f -name "*.yaml" | grep -v kustomization | sort))
+namePrefix: grafana-operator-
+namespace: $NAMESPACE
+images:
+  - name: gcr.io/kubebuilder/kube-rbac-proxy
+    newName: bitnami/kube-rbac-proxy
+    newTag: 0.11.0
+EOF
+  kustomize build "${KUSTOMIZATION%/*}"
+  ;;
+*)
+  VERSION="$INPUT"
+  TARGET_TAG=v"$VERSION"
+  TARGET_REPO="grafana-operator/grafana-operator"
+  TARGET_PATH="grafana-operator-$VERSION/deploy/manifests/$TARGET_TAG"
+  wget -O- "https://ghproxy.com/https://github.com/$TARGET_REPO/archive/refs/tags/$TARGET_TAG.tar.gz" |
+    tar -xz "$TARGET_PATH"
+  $(which rm) -rf "$CACHED"
+  mv "$TARGET_PATH" "$CACHED"
+  $(which rm) -r "${TARGET_PATH%%/*}"
+  ;;
+esac

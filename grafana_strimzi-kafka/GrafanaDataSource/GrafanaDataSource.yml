@@ -1,0 +1,14 @@
+apiVersion: integreatly.org/v1alpha1
+kind: GrafanaDataSource
+metadata:
+  name: strimzi
+spec:
+  datasources:
+    - access: proxy
+      editable: false
+      isDefault: true
+      name: strimzi
+      type: prometheus
+      url: http://prometheus-operated:9090
+      withCredentials: false
+  name: grafana-data-source

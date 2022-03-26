@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+
+set -e
+
+RULES_IN="${1:-rules.yml}"
+RULES_OUT="cached/rules.prom"
+
+$(which rm) -rf "./$RULES_OUT"
+mkdir -p "$RULES_OUT"
+
+function gen_rules4prometheus() {
+  local rules_raw rules_list
+  local rules_out
+  if [[ -s $RULES_IN ]]; then
+    rules_raw=$(cat "$RULES_IN")
+  else
+    echo
+    echo "FROM: https://github.com/samber/awesome-prometheus-alerts"
+    echo
+    rules_raw=$(wget -qO- https://ghproxy.com/https://github.com/samber/awesome-prometheus-alerts/raw/master/_data/rules.yml)
+  fi
+  local group service rule line
+  local group_name service_name
+  # shellcheck disable=SC2016
+  local YQ_PR='as $rule ireduce({};. * {"alert":$rule.name,"annotations":{"description":$rule.description},"expr":$rule.query,"for":$rule.for,"labels":{"severity":$rule.severity}})'
+  while IFS= read -r group; do
+    {
+      local T0 T1 T2 T3
+      T0=$group
+      T1=${T0//\//-}
+      T2=${T1// /-}
+      T3=${T2,,}
+      group_name=$T3
+    }
+    while IFS= read -r service; do
+      {
+        local T0 T1 T2 T3
+        T0=$service
+        T1=${T0//\//-}
+        T2=${T1// /-}
+        T3=${T2,,}
+        service_name=$T3
+      }
+      rules_out="$RULES_OUT/$group_name.$service_name.yaml"
+      rules_list=$(yq <<<"$rules_raw" e ".groups[]|select(.name==\"$group\").services[]|select(.name==\"$service\").exporters[].rules[].name")
+      if [[ -n $rules_list ]]; then
+        cat <<EOF
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    prometheus: k8s
+    role: alert-rules
+  name: gen-$service_name
+  namespace: monitoring
+  annotations:
+    generate.file.name: generatePrometheusRule
+spec:
+  groups:
+EOF
+        echo "  - name: $service"
+        echo "    rules:"
+        echo -e "$group::$service" >&2
+        while IFS= read -r rule; do
+          yq <<<"$rules_raw" e ".groups[]|select(.name==\"$group\").services[]|select(.name==\"$service\").exporters[].rules[]|select(.name==\"$rule\") $YQ_PR | [.]"
+        done <<<"$rules_list" | while IFS= read -r line; do
+          echo "    $line"
+        done
+      fi | sed '/: null$/d' >"$rules_out"
+    done < <(yq <<<"$rules_raw" e ".groups[]|select(.name==\"$group\").services[].name")
+  done < <(yq <<<"$rules_raw" e '.groups[].name')
+}
+
+__check_deps() {
+  local count=0
+  for bin in "$@"; do
+    command -v "$bin" >/dev/null || {
+      ((++count))
+      echo -en "Please INSTALL\t$bin\t\t"
+      case $bin in
+      yq)
+        echo "https://github.com/mikefarah/yq/releases"
+        ;;
+      sops)
+        echo "https://github.com/mozilla/sops/releases"
+        ;;
+      helm)
+        echo "https://github.com/helm/helm/releases"
+        ;;
+      helmfile)
+        echo "https://github.com/roboll/helmfile/releases"
+        ;;
+      kubectl)
+        echo "https://github.com/kubernetes/kubernetes/releases"
+        ;;
+      *)
+        echo "https://github.com/search?q=$bin"
+        ;;
+      esac
+    }
+  done
+  ((count == 0)) || {
+    echo
+    echo -en "GitHub[Acceleration Download]\thttps://ghproxy.com/"
+    echo
+    exit
+  }
+}
+
+__check_deps yq
+
+gen_rules4prometheus
