@@ -1,0 +1,128 @@
+#!/bin/bash -e
+echo -e "[find]\t$(date)"
+declare -A CONTENT_INVALID CONTENT_ALERT
+declare SEND_INVALID SEND_ALERT
+
+K8S_CLUSTER=${K8S_CLUSTER:-undefined}
+BEFORE_DAYS=${BEFORE_DAYS:-7}
+WX_TOKEN=${WX_TOKEN:-xxxx-xx-xx-xx-xxxx}
+
+urlencode() {
+  if [ $# -lt 1 ]; then
+    echo Usage: urlencode string
+    return
+  fi
+
+  local LANG=C
+
+  local arg="$1"
+  local i="0" c
+  while [ "$i" -lt ${#arg} ]; do
+    c=${arg:$i:1}
+    if grep -q '[a-zA-Z/:_\.\-]' <<<"$c"; then
+      echo -n "$c"
+    elif [ "$c" = " " ]; then
+      printf "+"
+    else
+      printf "%%%X" "'$c'"
+    fi
+    i=$((i + 1))
+  done
+}
+
+# kubectl yq openssl
+check_crt() {
+  local file_name4crt=$1 secret
+  local crt_deadline crt_deadline_sec crt_alert_sec
+  if [ -s "$file_name4crt" ]; then
+    while IFS= read -r secret; do
+      crt_deadline=$(kubectl -n "${file_name4crt##*_}" get secret "$secret" -o yaml |
+        yq e '.data."tls.crt"' - |
+        base64 -d |
+        openssl x509 -noout -enddate |
+        awk -F= '{print $NF}')
+      crt_deadline_sec=$(date +%s --date "$crt_deadline")
+      crt_alert_sec=$(($(date +%s --date "$crt_deadline") - 86400 * BEFORE_DAYS))
+      if [ "$crt_deadline_sec" -gt "$(date +%s)" ]; then
+        echo "${file_name4crt##*_}/$secret is valid: $crt_deadline"
+        if [ "$crt_alert_sec" -lt "$(date +%s)" ]; then
+          echo -e "${file_name4crt##*_}/$secret is ALERT: $crt_deadline"
+          if [ -z "${CONTENT_ALERT[${file_name4crt##*_}]}" ]; then
+            CONTENT_ALERT[${file_name4crt##*_}]="$secret"
+          else
+            CONTENT_ALERT[${file_name4crt##*_}]="${CONTENT_ALERT[${file_name4crt##*_}]}, $secret"
+          fi
+        fi
+      else
+        echo "${file_name4crt##*_}/$secret is invalid: $crt_deadline"
+        if [ -z "${CONTENT_INVALID[${file_name4crt##*_}]}" ]; then
+          CONTENT_INVALID[${file_name4crt##*_}]="$secret"
+        else
+          CONTENT_INVALID[${file_name4crt##*_}]="${CONTENT_INVALID[${file_name4crt##*_}]}, $secret"
+        fi
+      fi
+    done <"$file_name4crt"
+  else
+    echo "no Secret[kubernetes.io/tls] resources"
+  fi
+}
+
+# Namespace
+file_name4ns="ns"
+kubectl get ns --no-headers | awk '{print $1}' >"$file_name4ns"
+
+# Secret[kubernetes.io/tls]
+while IFS= read -r ns; do
+  kubectl -n "$ns" get secrets --no-headers 2>/dev/null | grep kubernetes.io/tls | awk '{print $1}' >"${file_name4ns}_$ns"
+  if [ -s "${file_name4ns}_$ns" ]; then
+    check_crt "${file_name4ns}_$ns"
+    echo
+  else
+    rm -f "${file_name4ns}_$ns"
+  fi
+done <"$file_name4ns"
+
+if [ -z "${!CONTENT_INVALID[*]}" ] && [ -z "${!CONTENT_ALERT[*]}" ]; then
+  exit
+fi
+
+if [ -n "${!CONTENT_INVALID[*]}" ]; then
+  echo "### INVALID ###"
+  for content_ns in ${!CONTENT_INVALID[*]}; do
+    k8s_ns=${content_ns%%_*}
+    echo "$k8s_ns: ${CONTENT_INVALID[$content_ns]}"
+  done
+  echo
+  SEND_INVALID="## 以下Secret证书<font color=\\\"comment\\\">已经过期</font>，请及时处理。\n>$(for content_ns in ${!CONTENT_INVALID[*]}; do
+    k8s_ns=${content_ns%%_*}
+    printf '**%s**: %s\\n' "$k8s_ns" "${CONTENT_INVALID[$content_ns]}"
+  done)\n"
+fi
+
+if [ -n "${!CONTENT_ALERT[*]}" ]; then
+  echo "### ALERT ###"
+  for content_ns in ${!CONTENT_ALERT[*]}; do
+    k8s_ns=${content_ns%%_*}
+    echo "$k8s_ns: ${CONTENT_ALERT[$content_ns]}"
+  done
+  echo
+  SEND_ALERT="## 以下Secret证书<font color=\\\"warning\\\">即将过期</font>[<$BEFORE_DAYS天]，请及时更新。\n>$(for content_ns in ${!CONTENT_ALERT[*]}; do
+    k8s_ns=${content_ns%%_*}
+    printf '**%s**: %s\\n' "$k8s_ns" "${CONTENT_ALERT[$content_ns]}"
+  done)\n"
+fi
+
+for wx_token in $(echo "$WX_TOKEN"); do
+cat >>"$0.msg" <<-EOF
+curl -sL -XPOST "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=$wx_token" -d '{
+  "msgtype": "markdown",
+  "markdown": {
+    "content": "# 集群：$K8S_CLUSTER\n$SEND_INVALID$SEND_ALERT"
+  }
+}' -H 'Content-Type:application/json'
+EOF
+done
+
+echo -e "[find]\t$(date)"
+bash "$0.msg" && /bin/rm -f "$0.msg"
+echo

@@ -1,0 +1,14 @@
+For cronjob status run:
+
+$ kubectl -n {{ template "checker-tls.namespace" . }} get cronjob {{ template "checker-tls.fullname" . }} -o wide
+
+To run cronjob now run:
+
+$ kubectl -n {{ template "checker-tls.namespace" . }} create job {{ template "checker-tls.fullname" . }} --from=cronjob/{{ template "checker-tls.fullname" . }}
+
+To see the logs from the most recent backup job run:
+
+$ kubectl -n {{ template "checker-tls.namespace" . }} logs $(kubectl -n {{ template "checker-tls.namespace" . }} get pods --selector \
+  job-name=$(kubectl -n {{ template "checker-tls.namespace" . }}  get jobs \
+  --output=jsonpath='{.items[-1:].metadata.name}') \
+  --output=jsonpath={.items..metadata.name})

@@ -1,9 +1,9 @@
-FROM alpine:3.13
+FROM alpine:3.14
 
 RUN set -ex; \
-	apk add --no-cache bash libstdc++ coreutils ca-certificates curl wget tzdata \
+	apk add --no-cache bash libstdc++ coreutils ca-certificates openssl curl wget tzdata \
 	tar gzip xz bzip2 p7zip zip unzip unrar \
-	pwgen jq tini su-exec
+	tini su-exec
 
 ARG GLIBC_VERSION=2.33-r0
 
@@ -11,7 +11,7 @@ ENV TZ=Asia/Shanghai \
 	LANG=zh_CN.UTF-8
 
 RUN set -ex; \
-	GOSU_VERSION=1.12; \
+	GOSU_VERSION=1.14; \
 	apk add --no-cache --virtual .gosu-deps \
 		ca-certificates \
 		dpkg \
@@ -64,5 +64,34 @@ RUN set -ex; \
 		ln -sf libthread_db-*.so libthread_db.so; ln -sf libthread_db-*.so libthread_db.so.1; \
 		ln -sf libutil-*.so libutil.so; ln -sf libutil-*.so libutil.so.1; \
 	/usr/glibc-compat/bin/localedef --inputfile ${LANG%.*} --charmap ${LANG#*.} $LANG
+
+
+ENV KUBECTL_VERSION=v1.21.4
+ARG url_kubectl=https://storage.googleapis.com/kubernetes-release/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl
+ENV JQ_VERSIPN=1.6
+ARG url_jq=https://github.com/stedolan/jq/releases/download/jq-$JQ_VERSIPN/jq-linux64
+ENV YQ_VERSION=v4.12.1
+ARG url_yq=https://github.com/mikefarah/yq/releases/download/$YQ_VERSION/yq_linux_amd64
+
+RUN set -ex; \
+    mkdir /download; \
+    cd /download; \
+    for url in $(env | grep url); \
+    do \
+        URL=$(echo $url | cut -d= -f2); \
+        echo $URL; \
+        if [[ ${URL##*.} = gz ]]; then \
+            curl -fsSL $URL | tar -xzvf -; \
+        elif [[ ${URL##*.} = zip ]]; then \
+            curl -fsSL $URL -o tmp.zip; \
+            unzip -q tmp.zip; \
+        else \
+            FILE=$(echo ${URL##*/} | cut -d_ -f1 | cut -d- -f1); \
+            curl -fsSL $URL -o $FILE; \
+            chmod +x $FILE; \
+        fi; \
+    done && find . -type f -perm /+x -exec mv -v {} /usr/local/bin \;; \
+    rm -rf /download
+
 
 ENTRYPOINT ["tini", "-wv", "--"]

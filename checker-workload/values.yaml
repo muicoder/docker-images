@@ -1,0 +1,24 @@
+# Default values for checker-workload.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+namespaceOverride: ""
+nameOverride: ""
+fullnameOverride: ""
+
+envs:
+  K8S_CLUSTER: 开发测试
+  MAX_RESTART: 0
+  MAX_OPERATOR: 10
+  SCALE_MIN: 0
+  SCALE_MAX: 0
+  WX_TOKEN: xxxx-xx-1-xx-xxxx xxxx-xx-2-xx-xxxx
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "checker-workload"

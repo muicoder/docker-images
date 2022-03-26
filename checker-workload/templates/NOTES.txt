@@ -1,0 +1,14 @@
+For cronjob status run:
+
+$ kubectl -n {{ template "checker-workload.namespace" . }} get cronjob {{ template "checker-workload.fullname" . }} -o wide
+
+To run cronjob now run:
+
+$ kubectl -n {{ template "checker-workload.namespace" . }} create job {{ template "checker-workload.fullname" . }} --from=cronjob/{{ template "checker-workload.fullname" . }}
+
+To see the logs from the most recent backup job run:
+
+$ kubectl -n {{ template "checker-workload.namespace" . }} logs $(kubectl -n {{ template "checker-workload.namespace" . }} get pods --selector \
+  job-name=$(kubectl -n {{ template "checker-workload.namespace" . }}  get jobs \
+  --output=jsonpath='{.items[-1:].metadata.name}') \
+  --output=jsonpath={.items..metadata.name})

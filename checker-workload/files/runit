@@ -1,0 +1,199 @@
+#!/bin/bash -e
+echo -e "[find]\t$(date)"
+declare -A SEND_CONTENT
+declare -A CONTENT_RESTART CONTENT_SCALE CONTENT_SUSPEND
+declare CONTENT_SPLIT=','
+# get restarted pods
+RESTARTED_PODS="restarted.pods"
+
+K8S_CLUSTER=${K8S_CLUSTER:-undefined}
+MAX_RESTART=${MAX_RESTART:-0}
+MAX_OPERATOR=${MAX_OPERATOR:-10}
+SCALE_MIN=${SCALE_MIN:-0}
+SCALE_MAX=${SCALE_MAX:-1}
+WX_TOKEN=${WX_TOKEN:-xxxx-xx-1-xx-xxxx}
+
+delete_pod() {
+  local ns=$1 workload=$2 pod
+  while IFS= read -r pod; do
+    kubectl -n "$ns" delete pods "$pod" || true
+  done < <(awk -v ns="$ns" '{if($1==ns)print $2}' "$RESTARTED_PODS" | grep "${workload#*/}")
+}
+
+find_workload() {
+  local ns_name=$1 pod_name=$2
+  local workload_info workload_type workload_name action workload2info
+  workload_info=$(kubectl -n "$ns_name" describe pods "$pod_name" | grep 'Controlled By: ' | awk '{print $NF}')
+  workload_type=${workload_info%/*}
+  case $workload_type in
+  DaemonSet | StatefulSet)
+    action=restart
+    workload_name=${workload_info#*/}
+    ;;
+  ReplicaSet | Job)
+    workload2info=$(kubectl -n "$ns_name" describe "$workload_type" "${workload_info#*/}" | grep 'Controlled By: ' | awk '{print $NF}')
+    workload_type=${workload2info%/*}
+    workload_name=${workload2info#*/}
+    case $workload_type in
+    Deployment)
+      action=scale
+      ;;
+    CronJob)
+      action=suspend
+      ;;
+    *)
+      action=""
+      ;;
+    esac
+    ;;
+  *)
+    action=""
+    ;;
+  esac
+  case $action in
+  restart)
+    if [ -z "${CONTENT_RESTART[$ns_name]}" ]; then
+      CONTENT_RESTART[$ns_name]="$workload_type/$workload_name"
+    else
+      if ! grep "$workload_type/$workload_name" <<<"${CONTENT_RESTART[$ns_name]}" &>/dev/null; then
+        CONTENT_RESTART[$ns_name]="${CONTENT_RESTART[$ns_name]}$CONTENT_SPLIT$workload_type/$workload_name"
+      fi
+    fi
+    ;;
+  scale)
+    if [ -z "${CONTENT_SCALE[$ns_name]}" ]; then
+      CONTENT_SCALE[$ns_name]="$workload_type/$workload_name"
+    else
+      if ! grep "$workload_type/$workload_name" <<<"${CONTENT_SCALE[$ns_name]}" &>/dev/null; then
+        CONTENT_SCALE[$ns_name]="${CONTENT_SCALE[$ns_name]}$CONTENT_SPLIT$workload_type/$workload_name"
+      fi
+    fi
+    ;;
+  suspend)
+    if [ -z "${CONTENT_SUSPEND[$ns_name]}" ]; then
+      CONTENT_SUSPEND[$ns_name]="$workload_type/$workload_name"
+    else
+      if ! grep "$workload_type/$workload_name" <<<"${CONTENT_SUSPEND[$ns_name]}" &>/dev/null; then
+        CONTENT_SUSPEND[$ns_name]="${CONTENT_SUSPEND[$ns_name]}$CONTENT_SPLIT$workload_type/$workload_name"
+      fi
+    fi
+    ;;
+  esac
+}
+
+operator_workload() {
+  local operator=$1 ns=$2 target=$3 workload_in_ns
+  echo -e "${operator^^} [$ns] $target"
+  workload_in_ns=("${target//$CONTENT_SPLIT/ }")
+  for workload in ${workload_in_ns[*]}; do
+    case $operator in
+    restart)
+      delete_pod "$ns" "$workload"
+      ;;
+    scale)
+      if grep -E "(dev|test)" <<<"$ns" &>/dev/null; then
+        kubectl -n "$ns" scale --replicas="$SCALE_MIN" "$workload"
+        kubectl -n "$ns" scale --replicas="$SCALE_MAX" "$workload"
+      else
+        delete_pod "$ns" "$workload"
+      fi
+      ;;
+    suspend)
+      kubectl -n "$ns" patch CronJob "$workload" -p '{"spec":{"suspend":true}}'
+      ;;
+    esac
+    if [[ "RollingUpdate" == $(kubectl -n "$ns" get "$workload" --output template='{{.spec.strategy.type}}') ]]; then
+      kubectl -n "$ns" rollout status "$workload" --watch
+    fi
+  done
+}
+
+gen_send_content() {
+  local action=$1 var head_content
+  var=$(declare -p "$2")
+  eval "declare -A local send_data"=${var#*=}
+  case $action in
+  restart)
+    head_content="## 以下服务Pods重启>$MAX_RESTART次：<font color=\\\"warning\\\">强制Restart</font>\n>"
+    ;;
+  scale)
+    head_content="## 以下服务Pods重启>$MAX_RESTART次：<font color=\\\"comment\\\">强制ScaleDown</font>\n>"
+    ;;
+  suspend)
+    head_content="## 以下服务Pods重启>$MAX_RESTART次：<font color=\\\"comment\\\">强制Suspend</font>\n>"
+    ;;
+  esac
+  if [ -n "${!send_data[*]}" ]; then
+    for content_ns in ${!send_data[*]}; do
+      echo "${content_ns%%_*}: ${send_data[$content_ns]}"
+    done
+    echo
+    SEND_CONTENT[$action]="$head_content$(for content_ns in ${!send_data[*]}; do
+      k8s_ns=${content_ns%%_*}
+      printf '**%s**: %s\\n' "$k8s_ns" "${send_data[$content_ns]}"
+    done)\n"
+  fi
+}
+
+main() {
+  local filename=$1
+  local ns_pod ns_name pod_name
+
+  kubectl get pods --no-headers --all-namespaces | sort | awk -v restart="$MAX_RESTART" '$5>restart{print $0}' >$RESTARTED_PODS
+  while true; do
+    if (($(awk 'END{print NR}' $RESTARTED_PODS) > MAX_OPERATOR)); then
+      ((MAX_RESTART += 1))
+      awk -v restart="$MAX_RESTART" '$5>restart{print $0}' $RESTARTED_PODS >$RESTARTED_PODS.next
+      if [ ! -s $RESTARTED_PODS.next ]; then
+        head $RESTARTED_PODS >$RESTARTED_PODS.next
+      fi
+      mv -f $RESTARTED_PODS.next $RESTARTED_PODS
+    else
+      break
+    fi
+  done
+
+  while IFS= read -r ns_pod; do
+    ns_name=${ns_pod%=*}
+    pod_name=${ns_pod#*=}
+    find_workload "$ns_name" "$pod_name"
+  done < <(awk '{printf("%s=%s\n",$1,$2)}' "$filename")
+  if ((${#CONTENT_RESTART[*]} > 0)); then
+    gen_send_content restart CONTENT_RESTART
+  fi
+  if ((${#CONTENT_SCALE[*]} > 0)); then
+    gen_send_content scale CONTENT_SCALE
+  fi
+  if ((${#CONTENT_SUPUSED[*]} > 0)); then
+    gen_send_content supused CONTENT_SUPUSED
+  fi
+}
+
+main $RESTARTED_PODS
+
+### ALERT ###
+if [ -z "${!SEND_CONTENT[*]}" ]; then
+  exit
+fi
+
+for wx_token in $(echo "$WX_TOKEN"); do
+  cat >>"$0.msg" <<-EOF
+curl -sL -XPOST "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=$wx_token" -d '{
+  "msgtype": "markdown",
+  "markdown": {
+    "content": "# 集群：$K8S_CLUSTER\n$(for key in ${!SEND_CONTENT[*]}; do echo -n "${SEND_CONTENT[$key]}"; done)"
+  }
+}' -H 'Content-Type:application/json'
+EOF
+done
+
+echo -e "[find]\t$(date)"
+bash "$0.msg" && /bin/rm -f "$0.msg"
+echo
+
+echo -e "[operator]\t$(date)"
+# operator_workload
+for key in ${!CONTENT_RESTART[*]}; do operator_workload restart "$key" "${CONTENT_RESTART[$key]}"; done
+for key in ${!CONTENT_SCALE[*]}; do operator_workload scale "$key" "${CONTENT_SCALE[$key]}"; done
+for key in ${!CONTENT_SUSPEND[*]}; do operator_workload suspend "$key" "${CONTENT_SUSPEND[$key]}"; done
+echo -e "[operator]\t$(date)"

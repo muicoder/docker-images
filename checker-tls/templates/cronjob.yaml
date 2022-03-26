@@ -1,0 +1,38 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: {{ include "checker-tls.fullname" . }}
+  namespace: {{ template "checker-tls.namespace" . }}
+  labels:
+  {{- include "checker-tls.labels" . | nindent 4 }}
+spec:
+  concurrencyPolicy: Replace
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 600
+      backoffLimit: 0
+      completions: 1
+      parallelism: 1
+      template:
+        spec:
+          containers:
+            - args:
+                - /bin/bash
+                - -ce
+                - |-
+                  {{ .Files.Get "files/runit" | nindent 18 }}
+              image: muicoder/alpine:kubectl
+              imagePullPolicy: IfNotPresent
+              name: {{ include "checker-tls.name" . }}
+              env:
+                {{- range $key, $val := .Values.envs }}
+                - name: {{ $key }}
+                  value: "{{ $val }}"
+                {{- end }}
+          restartPolicy: Never
+          serviceAccountName: {{ include "checker-tls.fullname" . }}
+  schedule: "10 10 * * *"
+  startingDeadlineSeconds: 10
+  successfulJobsHistoryLimit: 3
+  suspend: false

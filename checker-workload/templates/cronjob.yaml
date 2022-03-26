@@ -1,0 +1,38 @@
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: {{ include "checker-workload.fullname" . }}
+  namespace: {{ template "checker-workload.namespace" . }}
+  labels:
+  {{- include "checker-workload.labels" . | nindent 4 }}
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 600
+      backoffLimit: 0
+      completions: 1
+      parallelism: 1
+      template:
+        spec:
+          containers:
+            - args:
+                - /bin/bash
+                - -ce
+                - |-
+                  {{ .Files.Get "files/runit" | nindent 18 }}
+              image: muicoder/alpine:kubectl
+              imagePullPolicy: IfNotPresent
+              name: {{ include "checker-workload.name" . }}
+              env:
+                {{- range $key, $val := .Values.envs }}
+                - name: {{ $key }}
+                  value: "{{ $val }}"
+                {{- end }}
+          restartPolicy: Never
+          serviceAccountName: {{ include "checker-workload.fullname" . }}
+  schedule: "*/10 * * * *"
+  startingDeadlineSeconds: 10
+  successfulJobsHistoryLimit: 3
+  suspend: false
