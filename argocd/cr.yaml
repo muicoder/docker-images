@@ -1,0 +1,194 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ArgoCD
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  applicationInstanceLabelKey: argocd.argoproj.io/instance
+  configManagementPlugins: |-
+    - name: helmfile
+      init:
+        command:
+          - helmfile
+        args:
+          - repos
+      generate:
+        command:
+          - helmfile
+        args:
+          - template
+          - --skip-deps
+    - name: vaas-app
+      generate:
+        command:
+          - bash
+        args:
+          - vaas
+    - name: vaas
+      init:
+        command:
+          - bash
+        args:
+          - vaas
+      generate:
+        command:
+          - helmfile
+        args:
+          - template
+          - --skip-deps
+  controller:
+    appSync: 30s
+    env:
+      - name: TZ
+        value: Asia/Shanghai
+    parallelismLimit: 5
+    processors:
+      operation: 5
+      status: 5
+    resources:
+      limits:
+        cpu: 2
+        memory: 4Gi
+      requests:
+        cpu: 1
+        memory: 1Gi
+    sharding:
+      enabled: false
+      replicas: 2
+  dex: {}
+  disableAdmin: false
+  gaAnonymizeUsers: true
+  gaTrackingID: UA-12345-1
+  grafana:
+    enabled: false
+    ingress:
+      enabled: false
+    route:
+      enabled: false
+  ha:
+    enabled: false
+    redisProxyImage: haproxy
+    redisProxyVersion: 2.0-alpine
+    resources: {}
+  initialSSHKnownHosts:
+    excludedefaulthosts: false
+    keys: ""
+  kustomizeBuildOptions: |
+    --load_restrictor none
+  nodePlacement:
+    nodeSelector:
+      argocd: ""
+    tolerations:
+      - operator: Exists
+  prometheus:
+    enabled: false
+    ingress:
+      enabled: false
+    route:
+      enabled: false
+  rbac: {}
+  redis:
+    image: redis
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    version: 6.2-alpine
+  repo:
+    env:
+      - name: ARGOCD_EXEC_TIMEOUT
+        value: 10m0s
+      - name: ARGOCD_GNUPGHOME
+        value: /app/config/gpg/keys
+      - name: GNUPGHOME
+        value: /app/config/gpg/keys
+      - name: TZ
+        value: Asia/Shanghai
+    initContainers:
+      - args:
+          - -ce
+          - for f in /download-plugins/*; do if [[ -x $f ]]; then $f; fi; done
+        command:
+          - sh
+        env:
+          - name: BINARY_PLUGINS
+            value: curl=7.82.0 yq=4.16.2 sops=3.7.2 helmfile=0.144.0
+          - name: HELM_PLUGINS
+            value: secrets=3.11.0 diff=3.3.2
+          - name: TZ
+            value: Asia/Shanghai
+        image: alpine:edge
+        imagePullPolicy: Always
+        name: custom-tools
+        volumeMounts:
+          - mountPath: /custom-tools
+            name: custom-tools
+          - mountPath: /download-plugins
+            name: download-plugins
+    mountsatoken: true
+    resources: {}
+    version: v2.3.3
+    volumeMounts:
+      - mountPath: /custom-tools
+        name: custom-tools
+      - mountPath: /usr/local/bin/curl
+        name: custom-tools
+        subPath: curl
+      - mountPath: /usr/local/bin/yq
+        name: custom-tools
+        subPath: yq
+      - mountPath: /usr/local/bin/sops
+        name: custom-tools
+        subPath: sops
+      - mountPath: /usr/local/bin/helmfile
+        name: custom-tools
+        subPath: helmfile
+      - mountPath: /home/argocd/.local/share/helm/plugins
+        name: custom-tools
+        subPath: helm-plugins
+    volumes:
+      - name: custom-tools
+        persistentVolumeClaim:
+          claimName: argocd-repo-server
+      - configMap:
+          defaultMode: 493
+          name: argocd-repo-server-download-plugins
+        name: download-plugins
+  server:
+    autoscale:
+      enabled: true
+      hpa:
+        maxReplicas: 3
+        minReplicas: 1
+        scaleTargetRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: argocd-server
+        targetCPUUtilizationPercentage: 60
+    env:
+      - name: ARGOCD_SERVER_ROOTPATH
+        value: /argocd/argocd-server
+      - name: TZ
+        value: Asia/Shanghai
+    grpc:
+      ingress:
+        enabled: false
+    ingress:
+      enabled: false
+    insecure: true
+    resources:
+      limits:
+        cpu: 1
+        memory: 1Gi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    route:
+      enabled: false
+    service:
+      type: ""
+  statusBadgeEnabled: true
+  tls:
+    ca: {}
+  usersAnonymousEnabled: false
+  version: v2.3.3

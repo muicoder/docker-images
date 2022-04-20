@@ -1,0 +1,26 @@
+#!/bin/bash
+
+which kubectl || {
+  echo -e "Please INSTALL kubectl:\n\thttps://github.com/kubernetes/kubernetes/releases"
+  exit
+}
+
+set -e
+
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+echo "$DIR"
+
+# argocd-operator
+kubectl create -f "$DIR/bundle.yaml" || true
+
+REPO_SERVER_LABEL="app.kubernetes.io/component=repo-server"
+NAMESPACE=$(grep -E 'namespace: .+' "$DIR/bundle.yaml" | sort | uniq | awk '{print $NF}')
+
+kubectl create clusterrolebinding argocd-repo-server --clusterrole=cluster-admin --serviceaccount="$NAMESPACE:default" || true
+kubectl -n "$NAMESPACE" create configmap argocd-repo-server-download-plugins --from-file "$DIR/repo-server_init.sh" || true
+kubectl -n "$NAMESPACE" create -f "$DIR/cr.yaml" || true
+until grep deployment < <(kubectl -n "$NAMESPACE" get deployment -l $REPO_SERVER_LABEL --no-headers -oname); do
+  sleep 1
+done
+REPO_SERVER=$(kubectl -n "$NAMESPACE" get deployment -l $REPO_SERVER_LABEL --no-headers -oname)
+kubectl -n "$NAMESPACE" patch "$REPO_SERVER" --patch "$(cat "$DIR/repo-server_lifecycle.yaml")"

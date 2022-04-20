@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+spec:
+  selector: {}
+  template:
+    spec:
+      containers:
+        - name: argocd-repo-server
+          resources: {}
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - bash
+                  - -ce
+                  - >
+                    sleep 3;
+                    while read -r asc;
+                    do gpg --no-permission-warning --import $asc;
+                    done < <(find /custom-tools/ -type f -name "*.asc");
+            preStop:
+              exec:
+                command:
+                  - bash
+                  - -ce
+                  - >
+                    while read -r asc;
+                    do gpg --no-permission-warning --armor > /custom-tools/$asc.asc --export-secret-keys $asc;
+                    done < <(gpg --no-permission-warning --list-keys | grep -E '[0-9A-Z]{40}');
+                    while read -r asc;
+                    do rm -f /custom-tools/$asc.asc;
+                    done < <(gpg --no-permission-warning --list-secret-keys | grep ArgoCD -B1 | grep -E '[0-9A-Z]{40}');
