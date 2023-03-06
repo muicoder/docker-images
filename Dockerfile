@@ -1,17 +1,17 @@
-FROM alpine:3.14
+FROM alpine:3.17
 
 RUN set -ex; \
 	apk add --no-cache bash libstdc++ coreutils diffutils findutils iputils procps ca-certificates openssl curl wget tzdata \
-	tar gzip xz bzip2 p7zip zip unzip unrar \
+	tar gzip xz bzip2 p7zip zip unzip \
 	pwgen jq tini su-exec pstree tree wrk
 
-ARG GLIBC_VERSION=2.34-r0
+ARG GLIBC_VERSION=2.35-r0
 
 ENV TZ=Asia/Shanghai \
 	LANG=zh_CN.UTF-8
 
-RUN set -ex; \
-	GOSU_VERSION=1.14; \
+RUN set -e; \
+	GOSU_VERSION=1.16; \
 	apk add --no-cache --virtual .gosu-deps \
 		ca-certificates \
 		dpkg \
@@ -41,28 +41,10 @@ RUN set -ex; \
 	for pkg in glibc-$GLIBC_VERSION glibc-bin-$GLIBC_VERSION glibc-i18n-$GLIBC_VERSION; \
 	do \
 		curl -fsSLo ${pkg}.apk https://github.com/andyshinn/alpine-pkg-glibc/releases/download/$GLIBC_VERSION/${pkg}.apk; \
-	done; apk add --no-cache *.apk; rm *.apk; \
+	done; if apk add *.apk; then ls *.apk; fi; rm *.apk; \
 \
 	cd /usr/glibc-compat/lib && \
-		ln -sf ld-*.so ld-linux-x86-64.so.2; \
-		ln -sf libBrokenLocale-*.so libBrokenLocale.so; ln -sf libBrokenLocale-*.so libBrokenLocale.so.1; \
-		ln -sf libanl-*.so libanl.so; ln -sf libanl-*.so libanl.so.1; \
-		ln -sf libc-*.so libc.so.6; \
-		ln -sf libcrypt-*.so libcrypt.so; ln -sf libcrypt-*.so libcrypt.so.1; \
-		ln -sf libdl-*.so libdl.so; ln -sf libdl-*.so libdl.so.2; \
-		ln -sf libm-*.so libm.so.6; \
-		ln -sf libmvec-*.so libmvec.so; ln -sf libmvec-*.so libmvec.so.1; \
-		ln -sf libnsl-*.so libnsl.so.1; \
-		ln -sf libnss_compat-*.so libnss_compat.so; ln -sf libnss_compat-*.so libnss_compat.so.2; \
-		ln -sf libnss_db-*.so libnss_db.so; ln -sf libnss_db-*.so libnss_db.so.2; \
-		ln -sf libnss_dns-*.so libnss_dns.so; ln -sf libnss_dns-*.so libnss_dns.so.2; \
-		ln -sf libnss_files-*.so libnss_files.so; ln -sf libnss_files-*.so libnss_files.so.2; \
-		ln -sf libnss_hesiod-*.so libnss_hesiod.so; ln -sf libnss_hesiod-*.so libnss_hesiod.so.2; \
-		ln -sf libpthread-*.so libpthread.so; ln -sf libpthread-*.so libpthread.so.0; \
-		ln -sf libresolv-*.so libresolv.so; ln -sf libresolv-*.so libresolv.so.2; \
-		ln -sf librt-*.so librt.so; ln -sf librt-*.so librt.so.1; \
-		ln -sf libthread_db-*.so libthread_db.so; ln -sf libthread_db-*.so libthread_db.so.1; \
-		ln -sf libutil-*.so libutil.so; ln -sf libutil-*.so libutil.so.1; \
+		find . -type f -name "*.so.[0-9]" | while read -r so; do file=${so%.*}; if [ -s "${file##*/}" ]; then ln -sfv "${file##*/}" "$so"; fi; done; \
 	/usr/glibc-compat/bin/localedef --inputfile ${LANG%.*} --charmap ${LANG#*.} $LANG
 
 ENTRYPOINT ["tini", "-wv", "--"]
