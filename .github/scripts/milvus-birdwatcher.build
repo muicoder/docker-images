@@ -1,0 +1,25 @@
+#!/bin/sh
+
+set -e
+
+GIT_USER=${GIT_USER:-milvus-io}
+GIT_REPO=${GITHUB_REPO:-birdwatcher}
+
+OUTPUT_BIN="$GIT_REPO"
+PACKAGE="github.com/$GIT_USER/$GIT_REPO"
+
+[ -d "$GIT_REPO" ] || for i in $(seq 3); do git clone "https://$PACKAGE" --depth "$i" && break; done
+
+cd "$GIT_REPO" && {
+  GitCommit=$(git rev-parse --short HEAD)
+  GitDate=$(git show --pretty=format:"%ci" | head -1 | awk '{print $1}')
+  GitVer=$(git branch --show-current)
+} || exit
+
+build() {
+  git diff
+  CGO_ENABLED=1 GOOS="${0##*.}" GOARCH=$ARCH go build -trimpath -ldflags "-extldflags -static -w -s" -o "${OUTPUT_BIN}"
+  chmod a+x "$OUTPUT_BIN"
+}
+
+build && cp "$OUTPUT_BIN" /cached/

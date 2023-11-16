@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+set -e
+
+KIND=${1?Please input kubernetes api-resources KindName, Wildcard matching is supported.}
+
+CACHE_FILE=/tmp/cache.$(date +%s)
+kubectl api-resources --no-headers --cached >"$CACHE_FILE"
+
+NAMESPACED=$(awk -v kind="$KIND" '$NF==kind{print $(NF-1)}' "$CACHE_FILE")
+if [[ -z $NAMESPACED ]]; then
+  IFS=';' read -ra KINDS <<<"$(awk '{print $NF}' "$CACHE_FILE" | tr '\n' ';')"
+  for index in "${!KINDS[@]}"; do echo -e "$index:\t${KINDS[$index]}"; done | grep -i "$KIND"
+  read -rp "Select KIND: " sel
+  KIND=${KINDS[sel]}
+  NAMESPACED=$(awk -v kind="$KIND" '$NF==kind{print $(NF-1)}' "$CACHE_FILE")
+fi
+
+if $NAMESPACED; then
+  while IFS= read -r line; do
+    ns=${line%% *}
+    name=${line##* }
+    echo -e "###\tNAME($KIND):$name\tNamespace:$ns"
+    # shellcheck disable=SC2016
+    kubectl -n "$ns" get "$KIND" "$name" --output template='{{range $k,$v:=.metadata.labels}}{{$k}}={{$v}}{{"\n"}}{{end}}'
+    echo
+  done < <(
+    if [[ -n $2 ]]; then
+      ns=$2
+      if grep >/dev/null "^$ns$" < <(kubectl get Namespace --no-headers --output custom-columns='NAME:.metadata.name'); then
+        kubectl get "$KIND" --no-headers --output custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name' --namespace "$ns"
+      fi
+    else
+      kubectl get "$KIND" --no-headers --output custom-columns='NAMESPACE:.metadata.namespace,NAME:.metadata.name' --all-namespaces
+    fi
+  )
+else
+  while read -r name; do
+    echo -e "###\tNAME($KIND):$name"
+    # shellcheck disable=SC2016
+    kubectl get "$KIND" "$name" --output template='{{range $k,$v:=.metadata.labels}}{{$k}}={{$v}}{{"\n"}}{{end}}'
+    echo
+  done < <(kubectl get "$KIND" --no-headers --output custom-columns='NAME:.metadata.name')
+fi

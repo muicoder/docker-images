@@ -1,0 +1,16 @@
+#!/bin/sh
+for i; do
+  ik=${i%=*}
+  iv=${i#*=}
+  cat <<EOF >"plugin.yaml"
+apiVersion: argoproj.io/v1alpha1
+kind: ConfigManagementPlugin
+metadata:
+  name: $ik
+spec:
+  generate:
+    command: ["$(echo "${iv#*+}" | sed 's~,~","~g')"]
+  init:
+    command: ["$(echo "${iv%+*}" | sed 's~,~","~g')"]
+EOF
+done && cat plugin.yaml

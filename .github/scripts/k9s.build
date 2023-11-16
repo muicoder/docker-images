@@ -1,0 +1,37 @@
+#!/bin/sh
+
+set -e
+
+GIT_USER=${GIT_USER:-derailed}
+GIT_REPO=${GITHUB_REPO:-k9s}
+
+OUTPUT_BIN="$GIT_REPO"
+PACKAGE="github.com/$GIT_USER/$GIT_REPO"
+
+[ -d "$GIT_REPO" ] || for i in $(seq 3); do git clone "https://$PACKAGE" --depth "$i" && break; done
+
+cd "$GIT_REPO" && {
+  GitCommit=$(git rev-parse --short HEAD)
+  GitDate=$(git show --pretty=format:"%ci" | head -1 | awk '{print $1}')
+  GitVer=$(grep ^VERSION Makefile | awk '{print $NF}')
+} || exit
+
+build() {
+  go mod tidy >/dev/null 2>&1
+  (
+    #sed -i -E "/k8s.io/d;/helm.sh/d;/golang.org/d" go.mod
+    # shellcheck disable=SC2016
+    sed -i -E '/`.+`,/d;s~var Logo(.+)~var Logo\1`Kubernetes CLI`,~' internal/ui/splash.go
+    sed -i -E 's~!.+LatestRevCheck~false~' internal/model/cluster_info.go
+    sed -i -E 's~k9sFlags.[LC].+less~boolPtr(true)~' internal/config/k9s.go
+    sed -i -E 's~fullGVR =.+~fullGVR = true~g' internal/ui/table.go
+    git diff cmd internal
+  )
+  go mod tidy -v
+  git diff go.mod | grep "^[+-]" || true
+  GODEBUG=gotypesalias=0 CGO_ENABLED=0 GOOS="${0##*.}" GOARCH=$ARCH go build -trimpath -ldflags "-extldflags -static -w -s -X ${PACKAGE}/cmd.version=${GitVer} -X ${PACKAGE}/cmd.commit=${GitCommit} -X ${PACKAGE}/cmd.date=${GitDate}" -a -tags netgo -o "${OUTPUT_BIN}"
+  chmod a+x "$OUTPUT_BIN"
+  tar -zcf /cached/"$OUTPUT_BIN.tgz" "$OUTPUT_BIN"
+}
+
+build

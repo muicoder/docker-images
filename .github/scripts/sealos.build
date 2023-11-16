@@ -1,0 +1,103 @@
+#!/bin/bash
+
+set -e
+
+case $(uname -m) in
+amd64 | x86_64)
+  ARCH=amd64
+  ;;
+arm64 | aarch64)
+  ARCH=arm64
+  ;;
+*)
+  echo "Unsupported architecture $ARCH"
+  exit
+  ;;
+esac
+
+declare -A VERs=(
+  ["v030"]=""
+  ["v029"]=""
+  ["v028"]=""
+  ["v027"]=""
+  ["v026"]=""
+  ["v025"]=""
+  ["v024"]=""
+)
+for name in ${!VERs[*]}; do
+  export "$name"="$(until git ls-remote --refs --sort="-version:refname" --tags "https://github.com/kubernetes/api.git" | cut -d/ -f3- | grep -E "^v[0-9.]+$"; do sleep 1; done | grep "${name/0/0.}" | head -n 1)"
+done
+k8s_api_v02=$(
+  env | grep ^v02 | sort -r | while read -r v02; do
+    v=${v02#*=}
+    printf 's~(k8s.io/.+)%s[.0-9]+~\\1%s~g;' "${v%.*}" "$v"
+  done
+)
+
+rm -rf sealos
+git clone --depth 9 https://github.com/muicoder/sealos.git
+cd sealos
+readonly CODE_DIR=$(pwd)
+readonly CODE_HEAD=$(git rev-parse HEAD)
+readonly COMMIT=${COMMIT:-$(git rev-parse --short HEAD^)}
+readonly TAG=${TAG:-4.3}
+
+code_reset() {
+  if pushd "$CODE_DIR" >/dev/null 2>&1; then
+    git clean -fdx
+    git reset --hard "$CODE_HEAD"
+    git reset --soft "$COMMIT"
+    git tag --delete "$TAG" >/dev/null 2>&1 || true
+    git tag "$TAG"
+    git rev-parse --short HEAD
+    sed -E "s~^VERSION.+~VERSION=$TAG~;s~^BUILD_DATE.+~BUILD_DATE=2006-01-02T15:04:05-0700~" <scripts/make-rules/common.mk >f.sed && mv f.sed scripts/make-rules/common.mk
+    find . -type f -name "*.mod" | while read -r mod; do sed -E "$k8s_api_v02" <"$mod" >"$mod.sed" && mv "$mod.sed" "$mod"; done
+    popd >/dev/null 2>&1
+  else
+    exit
+  fi
+  go get github.com/google/gnostic
+  go get github.com/google/gnostic-models
+  go get k8s.io/kube-openapi
+  go work sync
+}
+{
+  buildah version
+  sudo docker run --rm -v "/usr/bin:/pwd" -w /tools --entrypoint /bin/sh "ghcr.io/labring-actions/cache:tools-$ARCH" -c "ls -lh && cp -a . /pwd" 2>/dev/null
+  buildah version
+  sudo apt-get remove -y docker docker-engine docker.io containerd runc moby-engine moby-cli moby-buildx moby-compose >/dev/null
+  sudo apt-get purge docker-ce docker-ce-cli containerd.io >/dev/null # docker-compose-plugin
+  sudo apt update >/dev/null
+  sudo apt install -y gcc-aarch64-linux-gnu qemu-user-static binfmt-support libgpgme-dev libbtrfs-dev libdevmapper-dev >/dev/null
+  rm -rf /tmp/go
+  wget -qO- https://go.dev/dl/go1.23.12.linux-$ARCH.tar.gz | sudo tar -C /tmp -xz
+  export PATH="/tmp/go/bin:${PATH}"
+  go version
+}
+
+code_reset
+grep 10.103.97.2 -rl | grep .go$ | xargs sed -i "s~10.103.97.2~172.31.255.254~g"
+BINS="lvscare sealctl sealos" make build.multiarch || true
+find bin -type f -exec ls -l {} +
+for hcra in amd64 arm64; do
+  pushd bin/linux_$hcra
+  tar -zcvf "/tmp/bin.$hcra.tgz" ./*
+  popd
+done
+
+code_reset
+{
+  go work edit -replace "k8s.io/cri-api=k8s.io/cri-api@$v025"
+  pushd "staging/src/github.com/labring/image-cri-shim"
+  sed -E "s~(k8s.io/.+)v0.2[.0-9]+~\1$v030~g;" <go.mod >f.sed && mv f.sed go.mod
+  go mod edit -replace "k8s.io/cri-api=k8s.io/cri-api@$v025" go.mod
+  go mod edit -replace "github.com/containers/image/v5=github.com/containers/image/v5@v5.30.2" go.mod
+  go mod edit -replace "google.golang.org/grpc=google.golang.org/grpc@v1.64.1" go.mod
+  go get -u all
+  git diff go.mod | grep "^[+-]"
+  popd
+  grep 10.103.97.2 -rl | grep .go$ | xargs sed -i "s~10.103.97.2~172.31.255.254~g"
+  BINS="image-cri-shim" make build.multiarch || true
+  find bin -type f -exec ls -l {} +
+  tar -zcvf /tmp/bin.ics.tgz bin
+}

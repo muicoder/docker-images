@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+set -e
+
+UNIX_SOCKET="/tmp/kubectl.proxy.$(date +%s)"
+
+kubectl proxy --unix-socket "$UNIX_SOCKET" &
+PID=$!
+while IFS= read -r NAMESPACE; do
+  echo "$NAMESPACE"
+  cat <<EOF | curl --unix-socket "$UNIX_SOCKET" \
+    --request PUT \
+    --header "Content-Type: application/json" \
+    "127.0.0.1/api/v1/namespaces/$NAMESPACE/finalize" \
+    --data-binary @-
+{
+  "kind": "Namespace",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "$NAMESPACE"
+  },
+  "spec": {
+    "finalizers": null
+  }
+}
+EOF
+done < <(kubectl get namespace -owide --no-headers | grep -v Active | awk '{print $1}')
+
+kill $PID
+$(which rm) -v "${UNIX_SOCKET%.*}"*
