@@ -1,0 +1,13 @@
+#!/bin/sh
+readonly VERSION="${1:-1.29.15}"
+cat <<\EOF >k3s.Dockerfile
+FROM scratch
+ARG TARGETARCH
+COPY .$TARGETARCH/k3s /
+EOF
+buildah rmi --all --force
+buildah build --network=host -t k3s:arm64 -f k3s.Dockerfile --arch arm64 k3s
+buildah build --network=host -t k3s:amd64 -f k3s.Dockerfile --arch amd64 k3s
+buildah manifest create --all "docker.io/muicoder/k3s:$VERSION" localhost/k3s:amd64 localhost/k3s:arm64
+buildah manifest push --rm "docker.io/muicoder/k3s:$VERSION"
+buildah rmi -af

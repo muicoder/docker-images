@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+crane version || exit 1
+readonly CRANE="crane --insecure"
+DST="${1?Usage: <DST_image> <SRC_image>}"
+shift
+$CRANE auth get "${DST%%/*}" || exit 1
+if echo "$*" | grep -q @sha256:; then
+  INDEX=$(for src; do echo "-m=$src"; done)
+elif [ $# -eq 1 ]; then
+  INDEX=$($CRANE manifest "$*" | xargs | tr -d '[:space:]' | sed 's~},{~\n~g' | grep -E 'architecture.+(amd64|arm64).+os.+linux' | sed -E "s~.+digest.+(sha256:[a-z0-9]+).+~-m=$*@\1~")
+fi
+# shellcheck disable=SC2086
+if echo "$INDEX" | grep -q @sha256:; then $CRANE index append --tag "$DST" $INDEX; fi

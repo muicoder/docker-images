@@ -1,0 +1,57 @@
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: internal
+  namespace: elastic-system
+spec:
+  config:
+    server:
+      basePath: /elastic-system/internal-kibana
+      rewriteBasePath: true
+    telemetry.enabled: false
+    xpack.reporting.roles.enabled: false
+  count: 2
+  elasticsearchRef:
+    name: internal
+  http:
+    tls:
+      selfSignedCertificate:
+        disabled: true
+  monitoring:
+    logs:
+      elasticsearchRefs:
+        - name: internal
+    metrics:
+      elasticsearchRefs:
+        - name: internal
+  podTemplate:
+    spec:
+      containers:
+        - command:
+            - bash
+            - -ce
+            - echo IyEvYmluL2Jhc2gKRj0kezE6LS9ldGMvJCh3aG9hbWkpLWNvbmZpZy8kKHdob2FtaSkueW1sfQpIPSdeXHMqLVxzKmh0dHAnIFU9J3VzZXJuYW1lOicgUD0ncGFzc3dvcmQ6JwptYXBmaWxlIC10IEggPCA8KGdyZXAgIiRIIiAiJEYiIHwgYXdrICd7cHJpbnQgJE5GfScpCm1hcGZpbGUgLXQgVSA8IDwoZ3JlcCAiJFUiICIkRiIgfCBhd2sgJ3twcmludCAkTkZ9JykKbWFwZmlsZSAtdCBQIDwgPChncmVwICIkUCIgIiRGIiB8IGF3ayAne3ByaW50ICRORn0nKQp3aGlsZSByZWFkIC1yIFVSTDsgZG8gbnVtPTEgJiYgdW50aWwgY3VybCAtZnNTTCAiJFVSTC9fY2F0L2hlYWx0aCIgMj4vZGV2L251bGw7IGRvIHNsZWVwICQoKDIgKiogKG51bSA8IDggPyBudW0gOiA4KSkpICYmICgobnVtKyspKTsgZG9uZSAmJiBlY2hvICIkbnVtIyRVUkwiOyBkb25lIDwgPChmb3IgaSBpbiAiJHshSFtAXX0iOyBkbyBlY2hvICIke0hbJGldLy9cL1wvL1wvXC8ke1VbJGldfToke1BbJGldfUB9IjsgZG9uZSB8IGdyZXAgLXYgOjU2MDEpCmV4ZWMgdGluaSAtc3cgZG9ja2VyLWVudHJ5cG9pbnQgLS0gLWMgL2V0Yy8qLWNvbmZpZy8qbWwgLWUK|base64 -d>data/$(whoami).sh;exec bash data/$(whoami).sh
+          name: metricbeat
+        - command:
+            - bash
+            - -ce
+            - echo IyEvYmluL2Jhc2gKRj0kezE6LS9ldGMvJCh3aG9hbWkpLWNvbmZpZy8kKHdob2FtaSkueW1sfQpIPSdeXHMqLVxzKmh0dHAnIFU9J3VzZXJuYW1lOicgUD0ncGFzc3dvcmQ6JwptYXBmaWxlIC10IEggPCA8KGdyZXAgIiRIIiAiJEYiIHwgYXdrICd7cHJpbnQgJE5GfScpCm1hcGZpbGUgLXQgVSA8IDwoZ3JlcCAiJFUiICIkRiIgfCBhd2sgJ3twcmludCAkTkZ9JykKbWFwZmlsZSAtdCBQIDwgPChncmVwICIkUCIgIiRGIiB8IGF3ayAne3ByaW50ICRORn0nKQp3aGlsZSByZWFkIC1yIFVSTDsgZG8gbnVtPTEgJiYgdW50aWwgY3VybCAtZnNTTCAiJFVSTC9fY2F0L2hlYWx0aCIgMj4vZGV2L251bGw7IGRvIHNsZWVwICQoKDIgKiogKG51bSA8IDggPyBudW0gOiA4KSkpICYmICgobnVtKyspKTsgZG9uZSAmJiBlY2hvICIkbnVtIyRVUkwiOyBkb25lIDwgPChmb3IgaSBpbiAiJHshSFtAXX0iOyBkbyBlY2hvICIke0hbJGldLy9cL1wvL1wvXC8ke1VbJGldfToke1BbJGldfUB9IjsgZG9uZSB8IGdyZXAgLXYgOjU2MDEpCmV4ZWMgdGluaSAtc3cgZG9ja2VyLWVudHJ5cG9pbnQgLS0gLWMgL2V0Yy8qLWNvbmZpZy8qbWwgLWUK|base64 -d>data/$(whoami).sh;exec bash data/$(whoami).sh
+          name: filebeat
+        - env:
+            - name: TZ
+              value: Asia/Shanghai
+          name: kibana
+          readinessProbe:
+            tcpSocket:
+              port: http
+          resources:
+            limits:
+              cpu: 1
+              memory: 1Gi
+            requests:
+              cpu: 1
+              memory: 1Gi
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/os: linux
+  version: 7.17.29

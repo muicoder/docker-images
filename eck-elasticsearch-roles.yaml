@@ -1,0 +1,170 @@
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: internal
+  namespace: elastic-system
+spec:
+  http:
+    tls:
+      selfSignedCertificate:
+        disabled: true
+  monitoring:
+    logs:
+      elasticsearchRefs:
+        - name: internal
+    metrics:
+      elasticsearchRefs:
+        - name: internal
+  nodeSets:
+    - config:
+        cluster.routing.allocation.disk.watermark.flood_stage: 95%
+        cluster.routing.allocation.disk.watermark.high: 90%
+        cluster.routing.allocation.disk.watermark.low: 85%
+        http.max_content_length: 1gb
+        indices.breaker.total.limit: 85%
+        indices.fielddata.cache.size: 20%
+        ingest.geoip.downloader.enabled: false
+        node.roles:
+          - master
+          - ingest
+          - remote_cluster_client
+        node.store.allow_mmap: true
+      count: 3
+      name: master
+      podTemplate:
+        spec:
+          containers:
+            - command:
+                - bash
+                - -ce
+                - echo IyEvYmluL2Jhc2gKRj0kezE6LS9ldGMvJCh3aG9hbWkpLWNvbmZpZy8kKHdob2FtaSkueW1sfQpIPSdeXHMqLVxzKmh0dHAnIFU9J3VzZXJuYW1lOicgUD0ncGFzc3dvcmQ6JwptYXBmaWxlIC10IEggPCA8KGdyZXAgIiRIIiAiJEYiIHwgYXdrICd7cHJpbnQgJE5GfScpCm1hcGZpbGUgLXQgVSA8IDwoZ3JlcCAiJFUiICIkRiIgfCBhd2sgJ3twcmludCAkTkZ9JykKbWFwZmlsZSAtdCBQIDwgPChncmVwICIkUCIgIiRGIiB8IGF3ayAne3ByaW50ICRORn0nKQp3aGlsZSByZWFkIC1yIFVSTDsgZG8gbnVtPTEgJiYgdW50aWwgY3VybCAtZnNTTCAiJFVSTC9fY2F0L2hlYWx0aCIgMj4vZGV2L251bGw7IGRvIHNsZWVwICQoKDIgKiogKG51bSA8IDggPyBudW0gOiA4KSkpICYmICgobnVtKyspKTsgZG9uZSAmJiBlY2hvICIkbnVtIyRVUkwiOyBkb25lIDwgPChmb3IgaSBpbiAiJHshSFtAXX0iOyBkbyBlY2hvICIke0hbJGldLy9cL1wvL1wvXC8ke1VbJGldfToke1BbJGldfUB9IjsgZG9uZSB8IGdyZXAgLXYgOjU2MDEpCmV4ZWMgdGluaSAtc3cgZG9ja2VyLWVudHJ5cG9pbnQgLS0gLWMgL2V0Yy8qLWNvbmZpZy8qbWwgLWUK|base64 -d>data/$(whoami).sh;exec bash data/$(whoami).sh
+              name: metricbeat
+            - command:
+                - bash
+                - -ce
+                - echo IyEvYmluL2Jhc2gKRj0kezE6LS9ldGMvJCh3aG9hbWkpLWNvbmZpZy8kKHdob2FtaSkueW1sfQpIPSdeXHMqLVxzKmh0dHAnIFU9J3VzZXJuYW1lOicgUD0ncGFzc3dvcmQ6JwptYXBmaWxlIC10IEggPCA8KGdyZXAgIiRIIiAiJEYiIHwgYXdrICd7cHJpbnQgJE5GfScpCm1hcGZpbGUgLXQgVSA8IDwoZ3JlcCAiJFUiICIkRiIgfCBhd2sgJ3twcmludCAkTkZ9JykKbWFwZmlsZSAtdCBQIDwgPChncmVwICIkUCIgIiRGIiB8IGF3ayAne3ByaW50ICRORn0nKQp3aGlsZSByZWFkIC1yIFVSTDsgZG8gbnVtPTEgJiYgdW50aWwgY3VybCAtZnNTTCAiJFVSTC9fY2F0L2hlYWx0aCIgMj4vZGV2L251bGw7IGRvIHNsZWVwICQoKDIgKiogKG51bSA8IDggPyBudW0gOiA4KSkpICYmICgobnVtKyspKTsgZG9uZSAmJiBlY2hvICIkbnVtIyRVUkwiOyBkb25lIDwgPChmb3IgaSBpbiAiJHshSFtAXX0iOyBkbyBlY2hvICIke0hbJGldLy9cL1wvL1wvXC8ke1VbJGldfToke1BbJGldfUB9IjsgZG9uZSB8IGdyZXAgLXYgOjU2MDEpCmV4ZWMgdGluaSAtc3cgZG9ja2VyLWVudHJ5cG9pbnQgLS0gLWMgL2V0Yy8qLWNvbmZpZy8qbWwgLWUK|base64 -d>data/$(whoami).sh;exec bash data/$(whoami).sh
+              name: filebeat
+            - env:
+                - name: ES_JAVA_OPTS
+                  value: -Des.search.ignore_awareness_attributes=true
+                - name: READINESS_PROBE_PROTOCOL
+                  value: http
+                - name: TZ
+                  value: Asia/Shanghai
+              name: elasticsearch
+              resources:
+                limits:
+                  cpu: 4
+                  memory: 8Gi
+                requests:
+                  cpu: 4
+                  memory: 8Gi
+          enableServiceLinks: false
+          initContainers:
+            - command:
+                - sh
+                - -c
+                - sysctl -w vm.max_map_count=262144 && chown -R elasticsearch:elasticsearch /data
+              name: elasticsearch-sysctl
+              securityContext:
+                privileged: true
+                runAsUser: 0
+              volumeMounts:
+                - mountPath: /data
+                  name: elasticsearch-data
+          nodeSelector:
+            kubernetes.io/os: linux
+          topologySpreadConstraints:
+            - labelSelector:
+                matchLabels:
+                  elasticsearch.k8s.elastic.co/node-master: "true"
+              maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: DoNotSchedule
+      volumeClaimTemplates:
+        - apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: elasticsearch-data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 50Gi
+            storageClassName: local-path
+    - config:
+        cluster.routing.allocation.disk.watermark.flood_stage: 95%
+        cluster.routing.allocation.disk.watermark.high: 90%
+        cluster.routing.allocation.disk.watermark.low: 85%
+        http.max_content_length: 1gb
+        ingest.geoip.downloader.enabled: false
+        node.roles:
+          - data
+        node.store.allow_mmap: true
+      count: 5
+      name: data
+      podTemplate:
+        spec:
+          containers:
+            - command:
+                - bash
+                - -ce
+                - echo IyEvYmluL2Jhc2gKRj0kezE6LS9ldGMvJCh3aG9hbWkpLWNvbmZpZy8kKHdob2FtaSkueW1sfQpIPSdeXHMqLVxzKmh0dHAnIFU9J3VzZXJuYW1lOicgUD0ncGFzc3dvcmQ6JwptYXBmaWxlIC10IEggPCA8KGdyZXAgIiRIIiAiJEYiIHwgYXdrICd7cHJpbnQgJE5GfScpCm1hcGZpbGUgLXQgVSA8IDwoZ3JlcCAiJFUiICIkRiIgfCBhd2sgJ3twcmludCAkTkZ9JykKbWFwZmlsZSAtdCBQIDwgPChncmVwICIkUCIgIiRGIiB8IGF3ayAne3ByaW50ICRORn0nKQp3aGlsZSByZWFkIC1yIFVSTDsgZG8gbnVtPTEgJiYgdW50aWwgY3VybCAtZnNTTCAiJFVSTC9fY2F0L2hlYWx0aCIgMj4vZGV2L251bGw7IGRvIHNsZWVwICQoKDIgKiogKG51bSA8IDggPyBudW0gOiA4KSkpICYmICgobnVtKyspKTsgZG9uZSAmJiBlY2hvICIkbnVtIyRVUkwiOyBkb25lIDwgPChmb3IgaSBpbiAiJHshSFtAXX0iOyBkbyBlY2hvICIke0hbJGldLy9cL1wvL1wvXC8ke1VbJGldfToke1BbJGldfUB9IjsgZG9uZSB8IGdyZXAgLXYgOjU2MDEpCmV4ZWMgdGluaSAtc3cgZG9ja2VyLWVudHJ5cG9pbnQgLS0gLWMgL2V0Yy8qLWNvbmZpZy8qbWwgLWUK|base64 -d>data/$(whoami).sh;exec bash data/$(whoami).sh
+              name: metricbeat
+            - command:
+                - bash
+                - -ce
+                - echo IyEvYmluL2Jhc2gKRj0kezE6LS9ldGMvJCh3aG9hbWkpLWNvbmZpZy8kKHdob2FtaSkueW1sfQpIPSdeXHMqLVxzKmh0dHAnIFU9J3VzZXJuYW1lOicgUD0ncGFzc3dvcmQ6JwptYXBmaWxlIC10IEggPCA8KGdyZXAgIiRIIiAiJEYiIHwgYXdrICd7cHJpbnQgJE5GfScpCm1hcGZpbGUgLXQgVSA8IDwoZ3JlcCAiJFUiICIkRiIgfCBhd2sgJ3twcmludCAkTkZ9JykKbWFwZmlsZSAtdCBQIDwgPChncmVwICIkUCIgIiRGIiB8IGF3ayAne3ByaW50ICRORn0nKQp3aGlsZSByZWFkIC1yIFVSTDsgZG8gbnVtPTEgJiYgdW50aWwgY3VybCAtZnNTTCAiJFVSTC9fY2F0L2hlYWx0aCIgMj4vZGV2L251bGw7IGRvIHNsZWVwICQoKDIgKiogKG51bSA8IDggPyBudW0gOiA4KSkpICYmICgobnVtKyspKTsgZG9uZSAmJiBlY2hvICIkbnVtIyRVUkwiOyBkb25lIDwgPChmb3IgaSBpbiAiJHshSFtAXX0iOyBkbyBlY2hvICIke0hbJGldLy9cL1wvL1wvXC8ke1VbJGldfToke1BbJGldfUB9IjsgZG9uZSB8IGdyZXAgLXYgOjU2MDEpCmV4ZWMgdGluaSAtc3cgZG9ja2VyLWVudHJ5cG9pbnQgLS0gLWMgL2V0Yy8qLWNvbmZpZy8qbWwgLWUK|base64 -d>data/$(whoami).sh;exec bash data/$(whoami).sh
+              name: filebeat
+            - env:
+                - name: ES_JAVA_OPTS
+                  value: -Des.search.ignore_awareness_attributes=true
+                - name: READINESS_PROBE_PROTOCOL
+                  value: http
+                - name: TZ
+                  value: Asia/Shanghai
+              name: elasticsearch
+              resources:
+                limits:
+                  cpu: 8
+                  memory: 16Gi
+                requests:
+                  cpu: 8
+                  memory: 16Gi
+          enableServiceLinks: false
+          initContainers:
+            - command:
+                - sh
+                - -c
+                - sysctl -w vm.max_map_count=262144 && chown -R elasticsearch:elasticsearch /data
+              name: elasticsearch-sysctl
+              securityContext:
+                privileged: true
+                runAsUser: 0
+              volumeMounts:
+                - mountPath: /data
+                  name: elasticsearch-data
+          nodeSelector:
+            kubernetes.io/os: linux
+          topologySpreadConstraints:
+            - labelSelector:
+                matchLabels:
+                  elasticsearch.k8s.elastic.co/node-data: "true"
+              maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: DoNotSchedule
+      volumeClaimTemplates:
+        - apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: elasticsearch-data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 500Gi
+            storageClassName: local-path
+  version: 7.17.29
+  volumeClaimDeletePolicy: DeleteOnScaledownOnly

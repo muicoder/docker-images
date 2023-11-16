@@ -1,0 +1,29 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: eck-operator
+  namespace: kube-system
+spec:
+  chart: eck-operator
+  createNamespace: true
+  failurePolicy: retry
+  insecureSkipTLSVerify: true
+  repo: https://helm.elastic.co
+  targetNamespace: elastic-system
+  valuesContent: |-
+    config:
+      containerRegistry: docker.elastic.co
+      logVerbosity: "-1"
+    image:
+      repository: docker.elastic.co/eck/eck-operator
+    installCRDs: true
+    nodeSelector:
+      operator: ""
+    replicaCount: 1
+    telemetry:
+      disabled: true
+    tolerations:
+      - operator: Exists
+    webhook:
+      enabled: false
+  version: 3.5.0

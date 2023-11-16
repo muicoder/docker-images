@@ -1,0 +1,41 @@
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: monitoring
+  namespace: elastic-system
+spec: # https://www.elastic.co/docs/deploy-manage/deploy/cloud-on-k8s/kibana-configuration
+  config:
+    telemetry.enabled: false
+    xpack.reporting.roles.enabled: false
+    xpack.security.authc.providers:
+      anonymous.anonymous1:
+        credentials: elasticsearch_anonymous_user
+        order: 0
+  count: 1
+  elasticsearchRef:
+    name: monitoring
+  http:
+    tls:
+      selfSignedCertificate:
+        disabled: true
+  podTemplate:
+    spec:
+      containers:
+        - env:
+            - name: TZ
+              value: Asia/Shanghai
+          name: kibana
+          readinessProbe:
+            tcpSocket:
+              port: http
+          resources:
+            limits:
+              cpu: 1
+              memory: 1Gi
+            requests:
+              cpu: 1
+              memory: 1Gi
+      enableServiceLinks: false
+      nodeSelector:
+        kubernetes.io/os: linux
+  version: 8.19.20

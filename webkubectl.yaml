@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: webkubectl
+    app.kubernetes.io/version: v2.12.2
+  name: webkubectl
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: webkubectl
+      app.kubernetes.io/version: v2.12.2
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: webkubectl
+        app.kubernetes.io/version: v2.12.2
+    spec:
+      containers:
+        - env:
+            - name: WELCOME_BANNER
+              value: Welcome to WebKubectl, try kubectl version.
+            - name: GOTTY_OPTIONS
+            - name: GOTTY_RECONNECT
+              value: "true"
+            - name: GOTTY_PORT
+              value: "30888"
+            - name: GOTTY_PERMIT_ARGUMENTS
+              value: "true"
+            - name: GOTTY_PERMIT_WRITE
+              value: "true"
+          image: muicoder/webkubectl:latest
+          name: webkubectl
+          ports:
+            - containerPort: 30888
+              name: http
+          securityContext:
+            privileged: true
+      enableServiceLinks: false
+      hostNetwork: true
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: "true"
+        node-role.kubernetes.io/master: "true"
+      terminationGracePeriodSeconds: 0
