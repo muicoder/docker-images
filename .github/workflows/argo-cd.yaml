@@ -1,0 +1,41 @@
+jobs:
+  repo-server_plugins:
+    env:
+      BASE64build: IyEvYmluL3NoCgpzZXQgLWUKCmNkIC9jYWNoZWQvcGx1Z2lucyB8fCBleGl0Cgpkb3dubG9hZFBsdWdpbnMoKSB7CiAgbmFtZT0kezElJT0qfQogIHZlcnNpb249JHsxIyMqPX0KICB0eXBlPWJpbgogIHBhdGg9JG5hbWUKICBjYXNlICRuYW1lIGluCiAgY3VybCkKICAgIHVybD0iaHR0cHM6Ly9naXRodWIuY29tL21vcGFyaXN0aGViZXN0L3N0YXRpYy1jdXJsL3JlbGVhc2VzL2Rvd25sb2FkL3YkdmVyc2lvbi9jdXJsLWFtZDY0IgogICAgOzsKICBzb3BzKQogICAgdXJsPSJodHRwczovL2dpdGh1Yi5jb20vbW96aWxsYS9zb3BzL3JlbGVhc2VzL2Rvd25sb2FkL3YkdmVyc2lvbi9zb3BzLXYkdmVyc2lvbi5saW51eC5hbWQ2NCIKICAgIDs7CiAgeXEpCiAgICB1cmw9Imh0dHBzOi8vZ2l0aHViLmNvbS9taWtlZmFyYWgveXEvcmVsZWFzZXMvZG93bmxvYWQvdiR2ZXJzaW9uL3lxX2xpbnV4X2FtZDY0IgogICAgOzsKICBoZWxtKQogICAgdHlwZT10Z3oKICAgIHVybD0iaHR0cHM6Ly9nZXQuaGVsbS5zaC9oZWxtLXYkdmVyc2lvbi1saW51eC1hbWQ2NC50YXIuZ3oiCiAgICBwYXRoPWxpbnV4LWFtZDY0LyRuYW1lCiAgICA7OwogIGhlbG1maWxlKQogICAgdHlwZT10Z3oKICAgIHVybD0iaHR0cHM6Ly9naXRodWIuY29tL2hlbG1maWxlL2hlbG1maWxlL3JlbGVhc2VzL2Rvd25sb2FkL3YkdmVyc2lvbi9oZWxtZmlsZV8ke3ZlcnNpb259X2xpbnV4X2FtZDY0LnRhci5neiIKICAgIDs7CiAgbmVhdCkKICAgIHR5cGU9dGd6CiAgICB1cmw9Imh0dHBzOi8vZ2l0aHViLmNvbS9pdGF5c2sva3ViZWN0bC1uZWF0L3JlbGVhc2VzL2Rvd25sb2FkL3YkdmVyc2lvbi9rdWJlY3RsLW5lYXRfbGludXhfYW1kNjQudGFyLmd6IgogICAgcGF0aD1rdWJlY3RsLSRuYW1lCiAgICA7OwogIGt1c3RvbWl6ZSkKICAgIHVybD0iaHR0cHM6Ly9naXRodWIuY29tL2t1YmVybmV0ZXMtc2lncy9rdXN0b21pemUvcmVsZWFzZXMvZG93bmxvYWQva3VzdG9taXplJTJGdiR2ZXJzaW9uL2t1c3RvbWl6ZV92JHt2ZXJzaW9ufV9saW51eF9hbWQ2NC50YXIuZ3oiCiAgICB0eXBlPXRnegogICAgOzsKICBlc2FjCiAgY2FzZSAkdHlwZSBpbgogIGJpbikKICAgIHdnZXQgLXFPICIkbmFtZSIgIiR1cmwiCiAgICA7OwogIHRneikKICAgIHdnZXQgLXFPLSAiJHVybCIgfCB0YXIgeHogIiRwYXRoIgogICAgaWYgWyAiJG5hbWUiID0gaGVsbSBdOyB0aGVuCiAgICAgIG12ICIkcGF0aCIgLgogICAgICBybWRpciAiJHtwYXRoJS8qfSIKICAgIGZpCiAgICA7OwogIGVzYWMKfQoKZm9yIHVzZXJfcmVwbyBpbiBcCiAgbW9wYXJpc3RoZWJlc3Qvc3RhdGljLWN1cmwgXAogIGhlbG1maWxlL2hlbG1maWxlIFwKICBoZWxtL2hlbG0gXAogIGl0YXlzay9rdWJlY3RsLW5lYXQgXAogIGt1YmVybmV0ZXMtc2lncy9rdXN0b21pemUgXAogIG1vemlsbGEvc29wcyBcCiAgbWlrZWZhcmFoL3lxOyBkbwogIGlmIFsgJHVzZXJfcmVwbyA9ICJrdWJlcm5ldGVzLXNpZ3Mva3VzdG9taXplIiBdOyB0aGVuCiAgICB1cmw9Imh0dHBzOi8vZ2l0aHViLmNvbS9Ib21lYnJldy9ob21lYnJldy1jb3JlL3Jhdy9tYXN0ZXIvRm9ybXVsYS9rdXN0b21pemUucmIiCiAgZWxzZQogICAgdXJsPSJodHRwczovL2FwaS5naXRodWIuY29tL3JlcG9zLyR1c2VyX3JlcG8vcmVsZWFzZXMvbGF0ZXN0IgogIGZpCiAgaWYgWyAkdXNlcl9yZXBvID0gImt1YmVybmV0ZXMtc2lncy9rdXN0b21pemUiIF07IHRoZW4KICAgIHRhZ19saW5lPSQod2dldCAtcU8tICIkdXJsIiB8IGdyZXAgdGFnOikKICBlbHNlCiAgICB0YWdfbGluZT0kKHdnZXQgLXFPLSAiJHVybCIgfCBncmVwIHRhZ19uYW1lKQogIGZpCiAgdmVyc2lvbj0kKGVjaG8gIiR0YWdfbGluZSIgfCBhd2sgLUZcIiAne3ByaW50ICQoTkYtMSl9JykKICByZXBvPSR7dXNlcl9yZXBvIyovfQogIGVjaG8gIiR7cmVwbyMqLX09JHt2ZXJzaW9uIyMqdn0iCmRvbmUgfCB0ZWUgPi5sYXRlc3QtdmVyc2lvbnMKCmlmICEgZGlmZiAudXNlLXZlcnNpb25zIC5sYXRlc3QtdmVyc2lvbnM7IHRoZW4KICB3aGlsZSBJRlM9IHJlYWQgLXIgcGx1Z2luOyBkbwogICAgZG93bmxvYWRQbHVnaW5zICIkcGx1Z2luIgogIGRvbmUgPC5sYXRlc3QtdmVyc2lvbnMKICBtdiAubGF0ZXN0LXZlcnNpb25zIC51c2UtdmVyc2lvbnMKICBkYXRlID4vY2FjaGVkLy51cGxvYWQKZmkKCmNobW9kIGEreCAuLyoK
+      BASE64docker: RlJPTSBhbHBpbmU6My4xNgoKV09SS0RJUiAvcGx1Z2lucwoKQ09QWSBjYWNoZWQvIC8K
+      GITHUB_REPO: argocd
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "~1.21"
+      - name: Build artifacts
+        run: |-
+          echo ${{ env.BASE64build }} | base64 -d >build
+          docker run --rm --entrypoint sh -v "$PWD/cached:/cached" "${{ secrets.DOCKERHUB_USERNAME }}/${GITHUB_REPO,,}:plugins" -c "cp -a /plugins /cached"
+          sudo chown -R $USER cached
+          cd cached/plugins && {
+          version=$(curl -fsSL https://api.github.com/repos/dalance/procs/releases/latest | jq -r .tag_name | sed 's~v~~')
+          wget -Oout https://github.com/dalance/procs/releases/download/v$version/procs-v$version-x86_64-linux.zip && unzip -o out && rm out
+          version=$(curl -fsSL https://api.github.com/repos/ClementTsang/bottom/releases/latest | jq -r .tag_name | sed 's~v~~')
+          wget -O- https://github.com/ClementTsang/bottom/releases/download/$version/bottom_x86_64-unknown-linux-musl.tar.gz | tar -xz btm
+          version=$(curl -fsSL https://api.github.com/repos/ajeetdsouza/zoxide/releases/latest | jq -r .tag_name | sed 's~v~~')
+          wget -O- https://github.com/ajeetdsouza/zoxide/releases/download/v$version/zoxide-$version-x86_64-unknown-linux-musl.tar.gz | tar -xz zoxide
+          cd -
+          }
+          docker run --label type=build -d --name linux -v "$PWD/cached:/cached" -v "$PWD/build:/build:ro" -w / alpine:edge sh /build
+          until [ -z "$(docker ps --filter status=running --filter label=type=build --quiet)" ]; do sleep 3; done
+          docker logs -t linux
+      - name: Docker
+        run: |-
+          cat "cached/plugins/.use-versions"
+          if [[ -s "cached/.upload" ]]; then
+            echo ${{ env.BASE64docker }} | base64 -d >Dockerfile
+            docker build --no-cache --pull . --tag "${{ secrets.DOCKERHUB_USERNAME }}/${GITHUB_REPO,,}:action"
+            docker login --username ${{ secrets.DOCKERHUB_USERNAME }} --password ${{ secrets.DOCKERHUB_PASSWORD }}
+            docker push "${{ secrets.DOCKERHUB_USERNAME }}/${GITHUB_REPO,,}" --all-tags
+            docker logout
+          fi
+name: Argo-CD
+on:
+  workflow_dispatch:

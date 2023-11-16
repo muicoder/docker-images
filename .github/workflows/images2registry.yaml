@@ -1,0 +1,22 @@
+env:
+  BASE64registry: IyEvYmluL3NoCmNhc2UgJChhcmNoKSBpbgp4ODZfNjQpCiAgQVJDSD1hbWQ2NAogIDs7CmFhcmNoNjQpCiAgQVJDSD1hcm02NAogIDs7CmVzYWMKCnNldCAtZQoKY2QgIiQobWt0ZW1wIC1kKSIgfHwgZXhpdAoKY3VybCAtc1NMICJodHRwczovL2RsLm1pbi5pby9jbGllbnQvbWMvcmVsZWFzZS9saW51eC0kQVJDSC9tYyIgLW8gbWMgJiYgY2htb2QgYSt4IG1jCnN1ZG8gY3AgLWEgbWMgL3Vzci9iaW4vCnZlcnNpb249JChnaXQgbHMtcmVtb3RlIC0tcmVmcyAtLXNvcnQ9Ii12ZXJzaW9uOnJlZm5hbWUiIC0tdGFncyAiaHR0cHM6Ly9naXRodWIuY29tL2xhYnJpbmcvc2VhbG9zLmdpdCIgfCBjdXQgLWQvIC1mMy0gfCBncmVwIC1FICJedlswLTkuXSskIiB8IGhlYWQgLW4gMSB8IGN1dCAtZHYgLWYyKQp1bnRpbCBjdXJsIC1zU0wgImh0dHBzOi8vZ2l0aHViLmNvbS9sYWJyaW5nL3NlYWxvcy9yZWxlYXNlcy9kb3dubG9hZC92JHZlcnNpb24vc2VhbG9zXyR7dmVyc2lvbn1fbGludXhfJEFSQ0gudGFyLmd6IiB8IHN1ZG8gdGFyIC1DIC91c3IvYmluIC14eiBzZWFsb3M7IGRvIHNsZWVwIDE7IGRvbmUKCnNlYWxvcyB2ZXJzaW9uIC0tc2hvcnQKZm9yIGFBUkNIIGluIGFtZDY0IGFybTY0OyBkbwogIG1rZGlyIHJlZ2lzdHJ5CiAgc2VhbG9zIHJlZ2lzdHJ5IHNhdmUgLS1hcmNoPSRhQVJDSCAtLXJlZ2lzdHJ5LWRpcj1yZWdpc3RyeSAtLWltYWdlcz0iJChlY2hvICIkKiIgfCBzZWQgJ3N+IH4sfmcnKSIKICBlY2hvICIkKiIgfCBzZWQgJ3N+IH5cbn5nJyB8IHNvcnQgPnJlZ2lzdHJ5L2ltYWdlcy50eHQKICBpZiBncmVwIC9rdWJlcm5ldGVzIHJlZ2lzdHJ5L2ltYWdlcy50eHQ7IHRoZW4KICAgIHRhciAtemNmICJyZWdpc3RyeS5zZWFsb3MuJGFBUkNILnRneiIgcmVnaXN0cnkKICBlbHNlCiAgICB0YXIgLXpjZiAicmVnaXN0cnkuJChkYXRlICslcykuJGFBUkNILnRneiIgcmVnaXN0cnkKICBmaQogIHJtIC1yZiByZWdpc3RyeQogIGxzIC1saCByZWdpc3RyeS4qCmRvbmUKCmlmIGN1cmwgLXNTTCAiJHMzVVJMIjsgdGhlbgogIG1jIGFsaWFzIHMgcGxheSAiJHMzVVJMIiAiJHMzQUsiICIkczNTSyIKZWxzZQogIG1jIG1iIC1wICJwbGF5LyR7UzNTRUFMT1MlJS8qfSIKZmkKCm1jIGNwIC0tbWQ1IHJlZ2lzdHJ5LiogInBsYXkvJFMzU0VBTE9TIgoKbWMgYWxpYXMgcm0gcGxheQoKcm0gLXJmIC90bXAvdG1wLioK
+  S3SEALOS: ${{ vars.S3SEALOS }}
+  s3AK: ${{ secrets.s3AK }}
+  s3SK: ${{ secrets.s3SK }}
+  s3URL: ${{ vars.s3URL }}
+jobs:
+  i2r:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Building
+        run: echo ${{ env.BASE64registry }} | base64 -d | sh -s ${{ inputs.images }}
+    timeout-minutes: 60
+name: images2registry
+on:
+  workflow_dispatch:
+    inputs:
+      images:
+        default: alpine:edge alpine:latest
+        description: Save images to S3
+        required: true
+        type: string
