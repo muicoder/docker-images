@@ -1,0 +1,35 @@
+#!/bin/sh
+set -e
+ARCH=$(arch)
+if ! soar --version >/dev/null 2>&1; then
+  VERSION=0.5.14
+  wget -qOsoar "https://github.com/pkgforge/soar/releases/download/v$VERSION/soar-$ARCH-linux"
+  chmod a+x soar
+  mv soar /usr/bin || exit
+fi
+soar --version
+binary() {
+  bin="$1"
+  case $bin in
+  darkhttpd)
+    echo httpd-asm
+    ;;
+  *)
+    echo "$bin"
+    ;;
+  esac
+}
+for bin; do
+  ALIAS=${bin%:*}
+  BIN=$(binary "${bin#*:}")
+  soar install --quiet --yes --binary-only "$BIN"
+  if [ -L "$HOME/.local/share/soar/bin/$BIN" ]; then
+    if [ "${ALIAS%/*}" != "$ALIAS" ]; then
+      mkdir -p "${ALIAS%/*}"
+    fi
+    cp -L "$HOME/.local/share/soar/bin/$BIN" "$ALIAS"
+  fi
+  ls -l "$ALIAS"
+done
+soar info
+rm -rf "$HOME/.local/share/soar"
