@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [[ "${#@}" -eq 1 ]] && [[ "$*" =~ / ]]; then
+  read -r -a array <<<"${1//\// }"
+  NAMESPACE="${array[0]}"
+  INSTANCE="${array[1]}"
+else
+  NAMESPACE=${1:-default}
+  INSTANCE=${2:-default-token-}
+fi
+
+while read -r secret; do
+  if [[ "$secret" =~ $INSTANCE ]]; then
+    echo -e "KubernetesSecret:[$NAMESPACE]\t$secret"
+    # shellcheck disable=SC2016
+    kubectl -n "$NAMESPACE" get secret "$secret" -o 'template={{range $k,$v:=.data}}{{$k}}:{{"\t"}}{{$v|base64decode}}{{"\n"}}{{end}}'
+    echo
+  fi
+done < <(kubectl -n "$NAMESPACE" get secrets -o template='{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}')

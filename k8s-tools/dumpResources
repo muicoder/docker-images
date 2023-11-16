@@ -1,0 +1,118 @@
+#!/bin/bash
+
+set -e
+
+if [ Linux != "$(uname)" ] || [ 0 != "$(id -u)" ]; then
+  echo "Only Linux(root) is supported"
+  exit
+fi
+
+SYNC4ARGOPROJ=argocd.argoproj.io/
+
+if ! kubectl neat help >/dev/null 2>&1; then
+  user_repo=itaysk/kubectl-neat
+  version=$(until curl -sL "https://api.github.com/repos/$user_repo/tags" | grep -E '"name": "v[0-9.]+"' | awk -F\" '{print $(NF-1)}' | head -n 1 | cut -dv -f2; do sleep 3; done)
+  echo "https://github.com/$user_repo/releases/download/v$version/${user_repo##*/}_linux_amd64.tar.gz"
+  (
+    pushd /usr/bin
+    until curl -L "https://ghproxy.com/github.com/$user_repo/releases/download/v$version/${user_repo##*/}_linux_amd64.tar.gz" | tar -zx ${user_repo##*/}; do sleep 3; done
+    popd
+    kubectl neat help
+  ) >/dev/null
+fi
+
+SLEEP_PERIOD="$(awk -v c="$(nproc)" 'BEGIN{print 1/c}')"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKUP="$DIR/$(kubectl version --short | grep Server | awk '{print $NF}')"
+rm -rf "$BACKUP"
+mkdir -p "$BACKUP"
+
+function yaml_write() {
+  local name=$1 namespace=$2 yaml_file
+  if [[ -z $namespace ]]; then
+    yaml_file="$BACKUP/cluster/$name.yaml"
+    kubectl neat get -- "$name" >"$yaml_file" 2>/dev/null || rm -f "$yaml_file"
+  else
+    yaml_file="$BACKUP/$namespace/$name.yaml"
+    kubectl neat get -- "$name" -n "${namespace#*/}" >"$yaml_file" 2>/dev/null || rm -f "$yaml_file"
+  fi
+}
+
+function resource_get() {
+  local res=$1 namespace=$2
+  (
+    if [[ -z $namespace ]]; then
+      mkdir -p "$BACKUP/cluster/$res"
+      kubectl get "$res" -otemplate='{{range .items}}{{if not .metadata.ownerReferences}}{{.kind}}/{{.metadata.name}}{{end}}{{"\n"}}{{end}}' | sed '/^$/d' |
+        while read -r name; do
+          if ! kubectl get "$name" -otemplate='{{.metadata}}' | grep "$SYNC4ARGOPROJ" >/dev/null; then
+            echo "$name"
+          fi
+        done
+    else
+      mkdir -p "$BACKUP/$namespace/$res"
+      if [[ $res == Secret ]]; then
+        kubectl get "$res" -otemplate='{{range .items}}{{if not .metadata.ownerReferences}}{{.kind}}/{{.metadata.name}}{{end}}{{"\n"}}{{end}}' -n "${namespace#*/}" | sed '/^$/d' |
+          while read -r name; do
+            if ! kubectl get "$name" -otemplate='{{.metadata}}' -n "${namespace#*/}" | grep -E "($SYNC4ARGOPROJ|kubernetes.io/service-account.name:)" >/dev/null; then
+              echo "$name"
+            fi
+          done
+      elif [[ $res == ConfigMap ]]; then
+        kubectl get "$res" -otemplate='{{range .items}}{{if not .metadata.ownerReferences}}{{.kind}}/{{.metadata.name}}{{end}}{{"\n"}}{{end}}' -n "${namespace#*/}" | sed '/^$/d' | grep -v "kube-root-ca.crt" |
+          while read -r name; do
+            if ! kubectl get "$name" -otemplate='{{.metadata}}' -n "${namespace#*/}" | grep "$SYNC4ARGOPROJ" >/dev/null; then
+              echo "$name"
+            fi
+          done
+      else
+        kubectl get "$res" -otemplate='{{range .items}}{{if not .metadata.ownerReferences}}{{.kind}}/{{.metadata.name}}{{end}}{{"\n"}}{{end}}' -n "${namespace#*/}" | sed '/^$/d' |
+          while read -r name; do
+            if ! kubectl get "$name" -otemplate='{{.metadata}}' -n "${namespace#*/}" | grep "$SYNC4ARGOPROJ" >/dev/null; then
+              echo "$name"
+            fi
+          done
+      fi
+    fi
+  ) | sort | uniq
+}
+
+function resource_dump() {
+  local namespaced=$1 r
+  if [[ -z $namespaced ]]; then
+    for res in $(kubectl api-resources --no-headers --namespaced=false | awk '{print $NF}' | grep -vE "(.+Review|APIService)" | sort -r | uniq); do
+      resource_get "$res" >"$(basename "$0").res"
+      echo "$(basename "$0")(cluster) => [$(grep -E ^.+$ -c "$(basename "$0").res")]$res"
+      if [[ -s "$(basename "$0").res" ]]; then
+        awk -F/ '{print $NF}' "$(basename "$0").res" | xargs
+        while read -r r; do
+          yaml_write "$r" &
+          sleep "$SLEEP_PERIOD"
+        done <"$(basename "$0").res"
+        wait
+      fi
+    done
+  else
+    for namespace in $(kubectl get namespaces -oname --no-headers); do
+      for res in $(kubectl api-resources --no-headers --namespaced=true | awk '{print $NF}' | grep -vE "(.+Review|Binding|Event)" | sort -r | uniq); do
+        resource_get "$res" "$namespace" >"$(basename "$0").res"
+        echo "$(basename "$0")($namespace) => [$(grep -E ^.+$ -c "$(basename "$0").res")]$res"
+        if [[ -s "$(basename "$0").res" ]]; then
+          awk -F/ '{print $NF}' "$(basename "$0").res" | xargs
+          while read -r r; do
+            yaml_write "$r" "$namespace" &
+            sleep "$SLEEP_PERIOD"
+          done <"$(basename "$0").res"
+          wait
+        fi
+      done
+    done
+  fi
+}
+
+resource_dump
+resource_dump namespaced
+
+find "$BACKUP" -depth -type d -empty -delete
+/bin/rm -f "$(basename "$0").res"
+tar -zcf "$BACKUP.tgz" "$BACKUP" >/dev/null
