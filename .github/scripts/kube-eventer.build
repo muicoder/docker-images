@@ -1,0 +1,26 @@
+#!/bin/sh
+
+set -e
+
+GIT_USER=${GIT_USER:-AliyunContainerService}
+GIT_REPO=${GITHUB_REPO:-kube-eventer}
+
+OUTPUT_BIN="$GIT_REPO"
+PACKAGE="github.com/$GIT_USER/$GIT_REPO"
+
+[ -d "$GIT_REPO" ] || for i in $(seq 3); do git clone "https://$PACKAGE" --depth "$i" && break; done
+
+cd "$GIT_REPO" && {
+  GitCommit=$(git rev-parse --short HEAD)
+  GitDate=$(git show --pretty=format:"%ci" | head -1 | awk '{print $1}')
+  GitVer=$(git branch --show-current)
+} || exit
+
+build() {
+  git diff
+  go mod tidy
+  CGO_ENABLED=0 GOOS="${0##*.}" GOARCH=$ARCH go build -trimpath -ldflags "-extldflags -static -w -s -X ${PACKAGE}/version.Version=${GitVer} -X ${PACKAGE}/version.GitCommit=${GitCommit}" -o "${OUTPUT_BIN}"
+  chmod a+x "$OUTPUT_BIN"
+}
+
+build && cp "$OUTPUT_BIN" /cached/
