@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+
+set -e
+
+find "$FLINK_HOME/opt" -type f -name \*.jar
+for name; do
+  find "$FLINK_HOME/opt" -name "*$name*.jar" |
+    while read -r file; do
+      jar=${file##*/}
+      plugin=${jar%-*}
+      mkdir -p "$FLINK_HOME/plugins/$plugin" && ln -sfv "$file" "$FLINK_HOME/plugins/$plugin"
+    done
+done
+chown -R flink:flink "$FLINK_HOME/plugins"
