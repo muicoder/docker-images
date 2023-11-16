@@ -1,0 +1,293 @@
+#!/usr/bin/env sh
+
+set -e
+
+FlinkNamespace="${FlinkNamespace:-flink}"
+
+if [ -n "$FLINK_ASC_URL" ]; then
+  FlinkVERSION="$(echo "${FLINK_ASC_URL##*/}" | awk -F- '{print $2}')"
+  FlinkVersion="v$(echo "$FlinkVERSION" | awk -F. '{printf("%s_%s"),$1,$2}')"
+  if [ "${FlinkVersion#*_}" -lt 15 ]; then
+    FlinkVersion="v1_15"
+  fi
+else
+  FlinkVERSION="1.15.4"
+  FlinkVersion="v1_15"
+fi
+
+TASK_CPU=${TASK_CPU:-2}
+TASK_MEMORY=${TASK_MEMORY:-4gb}
+TASK_SLOTS=${TASK_SLOTS:-2}
+JOB_CPU=${JOB_CPU:-2}
+JOB_MEMORY=${JOB_MEMORY:-4gb}
+case $ANTMAN_DEPLOY_K8S in
+lins-dev-test)
+  FlinkS3Bucket="flink-dev-test"
+  TASK_CPU=1
+  TASK_MEMORY=2gb
+  ;;
+lins-prod)
+  FlinkS3Bucket="lins-prod-flink"
+  ;;
+shuguangyun-prod)
+  FlinkS3Bucket="flink-shuguangyun"
+  ;;
+zibo-prod)
+  FlinkS3Bucket="flink-zibo"
+  ;;
+wufeng-prod)
+  FlinkS3Bucket="flink-wufeng"
+  ;;
+dianjun-aicity | dianjun-prod)
+  case $ANTMAN_DEPLOY_K8S_NS in
+  aicity-prod)
+    FlinkS3Bucket="aicity-prod-flink"
+    ;;
+  lins-prod)
+    FlinkS3Bucket="flink"
+    ;;
+  mp-prod)
+    FlinkS3Bucket="flink-mp"
+    ;;
+  esac
+  TASK_CPU=4
+  TASK_MEMORY=8gb
+  ;;
+*)
+  FlinkS3Bucket=${FlinkS3Bucket:-flink-operator}
+  ;;
+esac
+S3GW_URL=${S3GW_URL:-http://s3gw.flink.svc}
+if curl -s "$S3GW_URL:9090/telemetry" 2>/dev/null | grep -i telemetry; then
+  mc --json alias set local "$S3GW_URL" "${S3GW_AK:-czNndy11c2Vy}" "${S3GW_SK:-czNndy1wYXNz}" | jq -cr
+  mc --json mb --ignore-existing --with-lock --with-versioning "local/$FlinkS3Bucket" | jq -cr
+  mc --json retention set --default governance 7d "local/$FlinkS3Bucket" | jq -cr
+  mc --json stat "local/$FlinkS3Bucket" | jq -cr
+fi
+
+HOSTNAME=$(hostname)
+AUTH_BEARER="/var/run/secrets/kubernetes.io/serviceaccount/token"
+AppName=${HOSTNAME%"-$(hostname | awk -F- '{print $(NF-1)}')"*}
+AppNamespace="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+if [ "$(find /opt -type f -name "*.jar" | grep "${ANTMAN_APP_NAME:-$AppName}" --count)" -eq 1 ]; then
+  AppFile=$(find /opt -type f -name "${ANTMAN_APP_NAME:-$AppName}*.jar")
+  AppPort=$ANTMAN_APP_PORT
+else
+  AppFile="/opt/flink/examples/streaming/StateMachineExample.jar"
+  AppName="flink-example"
+  AppPort="9160"
+fi
+
+if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
+  entryClass=$1
+  shift
+fi
+
+USER_DIR="/tmp/$(whoami)"
+mkdir -p "$USER_DIR"
+
+CACHED_YAML="$USER_DIR/$AppName.yaml"
+RPCSVC_YAML="$USER_DIR/$AppName-svc.yaml"
+
+BIN_DIR="$USER_DIR/runjob"
+mkdir -p "$BIN_DIR"
+export PATH="$BIN_DIR:$PATH"
+
+apply() {
+  resourceVersion=$(curl --silent --insecure --header "Authorization: Bearer $(cat "$AUTH_BEARER")" \
+    "https://kubernetes.default/apis/flink.apache.org/v1beta1/namespaces/$FlinkNamespace/flinkdeployments/$AppNamespace-$AppName" |
+    jq -r .metadata.resourceVersion)
+  if [ "$resourceVersion" = null ]; then
+    curl --silent --insecure --header "Authorization: Bearer $(cat "$AUTH_BEARER")" \
+      -XPOST \
+      -H "Accept: application/json" \
+      -H "Content-Type: application/yaml" \
+      --data-binary @"$CACHED_YAML" \
+      "https://kubernetes.default/apis/flink.apache.org/v1beta1/namespaces/$FlinkNamespace/flinkdeployments" | jq -r .spec.job
+  else
+    sed "s/metadata:/metadata:\n  resourceVersion: \"$resourceVersion\"/" <"$CACHED_YAML" >"$USER_DIR/resourceVersion.yaml"
+    curl --silent --insecure --header "Authorization: Bearer $(cat "$AUTH_BEARER")" \
+      -XPUT \
+      -H "Accept: application/json" \
+      -H "Content-Type: application/yaml" \
+      --data-binary @"$USER_DIR/resourceVersion.yaml" \
+      "https://kubernetes.default/apis/flink.apache.org/v1beta1/namespaces/$FlinkNamespace/flinkdeployments/$AppNamespace-$AppName" | jq -r .spec.job
+  fi
+  until curl --silent --insecure --header "Authorization: Bearer $(cat "$AUTH_BEARER")" \
+    "https://kubernetes.default/api/v1/namespaces/$FlinkNamespace/services/$AppNamespace-$AppName-rest" | grep ownerReferences >/dev/null 2>&1; do
+    sleep 3
+  done
+  resourceVersion=$(curl --silent --insecure --header "Authorization: Bearer $(cat "$AUTH_BEARER")" \
+    "https://kubernetes.default/api/v1/namespaces/$FlinkNamespace/services/$AppNamespace-$AppName" |
+    jq -r .metadata.resourceVersion)
+  if [ "$resourceVersion" = null ]; then
+    curl --silent --insecure --header "Authorization: Bearer $(cat "$AUTH_BEARER")" \
+      -XPOST \
+      -H "Accept: application/json" \
+      -H "Content-Type: application/yaml" \
+      --data-binary @"$RPCSVC_YAML" \
+      "https://kubernetes.default/api/v1/namespaces/$FlinkNamespace/services" | jq -r .spec
+  else
+    sed "s/metadata:/metadata:\n  resourceVersion: \"$resourceVersion\"/" <"$RPCSVC_YAML" >"$USER_DIR/resourceVersion-svc.yaml"
+    curl --silent --insecure --header "Authorization: Bearer $(cat "$AUTH_BEARER")" \
+      -XPUT \
+      -H "Accept: application/json" \
+      -H "Content-Type: application/yaml" \
+      --data-binary @"$USER_DIR/resourceVersion-svc.yaml" \
+      "https://kubernetes.default/api/v1/namespaces/$FlinkNamespace/services/$AppNamespace-$AppName" | jq -r .spec
+  fi
+}
+
+if curl -s "zookeeper-headless.$FlinkNamespace:7000/metrics" >/dev/null 2>&1; then
+  readonly HA=zookeeper
+else
+  case $FlinkVersion in
+  v1_13 | v1_14 | v1_15)
+    readonly HA=org.apache.flink.kubernetes.highavailability.KubernetesHaServicesFactory
+    ;;
+  *)
+    readonly HA=kubernetes
+    ;;
+  esac
+fi
+cat <<EOF >"$CACHED_YAML"
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: $AppNamespace-$AppName
+  namespace: $FlinkNamespace
+spec:
+  flinkConfiguration:
+$(if [ "$UPGRADEMODE" = stateless ]; then
+  echo "    #high-availability.storageDir: s3://$FlinkS3Bucket/flink-$FlinkVERSION-ha"
+else
+  echo "    high-availability.storageDir: s3://$FlinkS3Bucket/flink-$FlinkVERSION-ha"
+  case $FlinkVersion in
+  v1_13 | v1_14 | v1_15 | v1_16)
+    echo "    high-availability: $HA"
+    ;;
+  *)
+    echo "    high-availability.type: $HA"
+    ;;
+  esac
+  case $HA in
+  zookeeper)
+    echo "    high-availability.zookeeper.quorum: zookeeper-client:2181"
+    ;;
+  esac
+fi)
+    metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+    metrics.reporter.prom.port: 9249-9250
+    state.checkpoints.dir: s3://$FlinkS3Bucket/flink-$FlinkVERSION-cp/$AppNamespace-$AppName
+    state.savepoints.dir: s3://$FlinkS3Bucket/flink-$FlinkVERSION-sp/$AppNamespace-$AppName
+    state.backend: rocksdb
+    jobmanager.rpc.address: $AppNamespace-$AppName
+    taskmanager.numberOfTaskSlots: "$TASK_SLOTS"
+  flinkVersion: $FlinkVersion
+  image: $(if [ "$AppName" = "flink-example" ]; then
+  echo "docker.io/flink:$FlinkVERSION"
+else
+  curl --silent --insecure --header "Authorization: Bearer $(cat "$AUTH_BEARER")" "https://kubernetes.default/apis/apps/v1/namespaces/$AppNamespace/deployments/$AppName" | jq .spec.template.spec.containers[].image -r
+fi)
+  job:
+    args:
+$(for i; do echo "    - \"$i\""; done)$([ -n "$entryClass" ] && echo && echo "    entryClass: $entryClass")
+    jarURI: local://$AppFile
+    parallelism: ${PARALLEL:-1}
+    savepointTriggerNonce: $(date +%s)
+    state: running
+    upgradeMode: ${UPGRADEMODE:-savepoint}
+  jobManager:
+    podTemplate:
+      spec:
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      component: jobmanager
+                  topologyKey: kubernetes.io/hostname
+                weight: 50
+        nodeSelector:
+          flink: ""
+    replicas: ${REPLICAS:-1}
+    resource:
+      cpu: $JOB_CPU
+      memory: "$JOB_MEMORY"
+  podTemplate:
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    type: flink-native-kubernetes
+                topologyKey: kubernetes.io/hostname
+              weight: 100
+      containers:
+        - env:
+            - name: FLINK_ENV_JAVA_OPTS
+              value: -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:MinRAMPercentage=50.0 -XX:InitialRAMPercentage=50.0
+          name: flink-main-container
+          ports:
+          - containerPort: 9249
+            name: metrics
+  restartNonce: $(date +%s)
+  serviceAccount: flink-operator
+  taskManager:
+    podTemplate:
+      spec:
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      component: taskmanager
+                  topologyKey: kubernetes.io/hostname
+                weight: 50
+        nodeSelector:
+          flink: ""
+    resource:
+      cpu: $TASK_CPU
+      memory: "$TASK_MEMORY"
+EOF
+
+cat <<EOF >"$RPCSVC_YAML"
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: $AppNamespace-$AppName
+    type: flink-native-kubernetes
+  name: $AppNamespace-$AppName
+  namespace: $FlinkNamespace
+spec:
+  ports:
+    - name: metrics
+      protocol: TCP
+      port: 9249
+      targetPort: 9249
+    - name: rest
+      protocol: TCP
+      port: 8081
+      targetPort: 8081
+    - name: jobmanager-rpc
+      protocol: TCP
+      port: 6123
+      targetPort: 6123
+    - name: blobserver
+      protocol: TCP
+      port: 6124
+      targetPort: 6124
+  selector:
+    app: $AppNamespace-$AppName
+    component: jobmanager
+    type: flink-native-kubernetes
+  type: ClusterIP
+EOF
+
+apply
+exec hurry "$AppPort" /opt/flink

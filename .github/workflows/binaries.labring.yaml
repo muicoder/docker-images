@@ -1,0 +1,30 @@
+env:
+  BASE64registry: IyEvYmluL3NoCmNhc2UgJChhcmNoKSBpbgp4ODZfNjQpCiAgQVJDSD1hbWQ2NAogIDs7CmFhcmNoNjQpCiAgQVJDSD1hcm02NAogIDs7CmVzYWMKCnNldCAtZQoKY3VybCAtc1NMICJodHRwczovL2RsLm1pbi5pby9jbGllbnQvbWMvcmVsZWFzZS9saW51eC0kQVJDSC9tYyIgLW8gbWMgJiYgY2htb2QgYSt4IG1jCnJlYWRvbmx5IE1DPSIkUFdEL21jIgoKaWYgY3VybCAtc1NMICIkczNVUkwiOyB0aGVuCiAgJE1DIGFsaWFzIHMgcGxheSAiJHMzVVJMIiAiJHMzQUsiICIkczNTSyIKZWxzZQogICRNQyBtYiAtcCAicGxheS8ke1MzU0VBTE9TJSUvKn0iCmZpCgokTUMgY3AgLS1tZDUgYmluLiogInBsYXkvJFMzU0VBTE9TIgoKJE1DIGFsaWFzIHJtIHBsYXkK
+  S3SEALOS: ${{ vars.S3SEALOS }}
+  s3AK: ${{ secrets.s3AK }}
+  s3SK: ${{ secrets.s3SK }}
+  s3URL: ${{ vars.s3URL }}
+jobs:
+  sealos:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - env:
+          COMMIT: ${{ inputs.commit }}
+          TAG: ${{ inputs.tag }}
+        name: Building
+        run: bash .github/scripts/sealos.build && cd /tmp && echo ${{ env.BASE64registry }} | base64 -d | sh
+name: buildImage::labring/sealos
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: commit id for build
+        required: false
+        type: string
+      tag:
+        default: "5.1"
+        description: tag for version
+        required: true
+        type: string
