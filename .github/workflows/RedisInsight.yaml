@@ -1,0 +1,66 @@
+env:
+  BASE64manifest: IyEvYmluL3NoCgpDTUQ9JChpZiBidWlsZGFoID4vZGV2L251bGw7IHRoZW4gZWNobyBidWlsZGFoOyBlbGlmIHNlYWxvcyA+L2Rldi9udWxsOyB0aGVuIGVjaG8gc2VhbG9zOyBmaSkKTUY9Im1mOiQoZGF0ZSArJUYpIgoKUkVQTz0iJHsxOi1kb2NrZXIuaW8vYml0bmFtaS9tZXRyaWNzLXNlcnZlcjpkb2NrZXIuaW8vbXVpY29kZXIvbWV0cmljcy1zZXJ2ZXJ9IgpUQUdTPSIkezI6LTAuNi4zfSIKVEFHPSIkezM6LSRUQUdTfSIKCmlmIFsgIiR7UkVQTyU6Kn0iICE9ICIkUkVQTyIgXTsgdGhlbgogIGlmIFsgIiR7VEFHUyUsKn0iICE9ICIkVEFHUyIgXTsgdGhlbgogICAgZWNobyAiJFRBR1MiIHwgc2VkICJzfix+XG5+ZyIgfCB3aGlsZSByZWFkIC1yIHRhZzsgZG8KICAgICAgZWNobyAiJHtSRVBPJToqfTokdGFnIgogICAgZG9uZSB8ICRDTUQgcHVsbAogIGVsc2UKICAgICRDTUQgcHVsbCAtLXBvbGljeT1hbHdheXMgLS1wbGF0Zm9ybT1saW51eC9hbWQ2NCAiJHtSRVBPJToqfTokVEFHUyIKICAgICRDTUQgdGFnICIke1JFUE8lOip9OiRUQUdTIiAiJHtSRVBPIyo6fTokVEFHUy1hbWQ2NCIKICAgICRDTUQgcHVsbCAtLXBvbGljeT1hbHdheXMgLS1wbGF0Zm9ybT1saW51eC9hcm02NCAiJHtSRVBPJToqfTokVEFHUyIKICAgICRDTUQgdGFnICIke1JFUE8lOip9OiRUQUdTIiAiJHtSRVBPIyo6fTokVEFHUy1hcm02NCIKICAgIFRBR1M9IiRUQUdTLWFtZDY0LCRUQUdTLWFybTY0IgogIGZpCmZpCgplY2hvICIkVEFHUyIgfCBzZWQgInN+LH5cbn5nIiB8IHdoaWxlIHJlYWQgLXIgdGFnOyBkbwogIGVjaG8gIiR7UkVQTyMqOn06JHRhZyIKZG9uZSB8IHhhcmdzICRDTUQgbWFuaWZlc3QgY3JlYXRlIC0tYWxsICIkTUYiCiRDTUQgbWFuaWZlc3QgcHVzaCAtLWFsbCAiJE1GIiAiZG9ja2VyOi8vJHtSRVBPIyo6fTokVEFHIgokQ01EIG1hbmlmZXN0IHJtICIkTUYiIHx8IHRydWUK
+jobs:
+  RedisInsight:
+    env:
+      GITHUB_REPO: RedisInsight
+    outputs:
+      version: ${{ steps.git.outputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: git
+        name: Build artifacts
+        run: |-
+          rm -rf RedisInsight .git
+          git clone https://github.com/RedisInsight/RedisInsight.git
+          mv RedisInsight/.git .
+          TAG=$(git ls-remote --refs --sort="-version:refname" --tags https://github.com/RedisInsight/RedisInsight.git | cut -d/ -f3- | head -n 1)
+          if docker pull ${{ secrets.DOCKERHUB_USERNAME }}/redisinsight:$TAG; then
+            git reset --hard
+            echo "version=latest" >>$GITHUB_OUTPUT
+          else
+            git reset --hard $TAG
+            echo "version=$TAG" >>$GITHUB_OUTPUT
+          fi
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        continue-on-error: true
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ matrix.os }}/${{ matrix.arch }}
+          provenance: false
+          pull: true
+          push: true
+          sbom: false
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/redisinsight:action-${{ matrix.arch }}
+    strategy:
+      matrix:
+        arch:
+          - amd64
+        os:
+          - linux
+  aio-manifest:
+    needs:
+      - RedisInsight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+      - name: manifest
+        run: echo ${{ env.BASE64manifest }} | base64 -d | sh -s docker.io/${{ secrets.DOCKERHUB_USERNAME }}/redisinsight action-amd64 ${{ needs.RedisInsight.outputs.version }}
+name: buildImage::RedisInsight
+on:
+  workflow_dispatch:
