@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+ARCH=$(arch)
+case $ARCH in
+aarch64)
+  readonly URL="https://bin.ajam.dev/${ARCH}_arm64"
+  ;;
+x86_64)
+  readonly URL="https://bin.ajam.dev/${ARCH}"
+  ;;
+*)
+  echo https://bin.ajam.dev
+  exit
+  ;;
+esac
+if ! wget --help 2>&1 | grep use-server-timestamps >/dev/null; then
+  if wget -qO"/tmp/wget$(date +%F)" "${URL}_Linux/wget"; then
+    chmod a+x "/tmp/wget$(date +%F)" && ln -sfv "/tmp/wget$(date +%F)" "$(which wget)"
+  fi
+fi
+for bin; do if wget -qO"${bin%:*}" "${URL}_Linux/${bin#*:}"; then chmod a+x "${bin%:*}"; else rm -v "${bin%:*}"; fi; done
